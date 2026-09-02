@@ -8,7 +8,7 @@
 
 | *event_id* | date | name | reg_count | attend_count | event_type                               | amount  |
 | ---------- | ---- | ---- | --------- | ------------ | ---------------------------------------- | ------- |
-| uuid, PK   | date | str  | int       | int          | `TECH/NONTECH/WORKSHOP/HACKATHON/RACING` | ??????? |
+| uuid, PK   | date | str  | int       | int          | `TECH/NONTECH/WORKSHOP/HACKATHON/RACING` |  |
 
 TicketType
 
@@ -58,11 +58,6 @@ Lock is applied, now publish to redis (paginated)
 Lock released when all payments are queued
 XREADGROUP -> Pending evaluation list -> XACK (if ack not present, put back to queue (worker can consume)) - at least once delivery
 
-**Attendance**
-
-| attendance_entry_id | user_id         | event_id         | attendance_time |
-| ------------------- | --------------- | ---------------- | --------------- |
-| uuid/int/whatever   | uuid, FK->Users | uuid, FK->Events | timestamp       |
 
 **Verification**
 
