@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.annotation.JsonNaming;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -21,6 +22,7 @@ public class HackathonRegistrationRequest {
     private String track;
     private String psDescription;
     private List<MemberDTO> members;
+    private BigDecimal amountToBePaid;
 
     @Data
     @NoArgsConstructor

@@ -16,7 +16,7 @@ CREATE TABLE public.ticket_type (
 );
 
 CREATE TABLE public.users (
-                       user_id UUID PRIMARY KEY, -- App layer should generate UUIDv7
+                       user_id UUID PRIMARY KEY,
                        email VARCHAR(255) UNIQUE NOT NULL,
                        phone VARCHAR(15),
                        name VARCHAR(255) NOT NULL,
