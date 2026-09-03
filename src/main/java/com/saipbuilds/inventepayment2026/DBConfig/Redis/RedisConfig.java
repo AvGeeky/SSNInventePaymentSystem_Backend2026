@@ -24,7 +24,7 @@ public class RedisConfig {
     @Value("${spring.data.redis.password}")
     private String password;
 
-    @Value("${spring.data.redis.timeout:2000}")
+    @Value("${spring.data.redis.timeout:10000}")
     private long timeout;
 
     @Bean

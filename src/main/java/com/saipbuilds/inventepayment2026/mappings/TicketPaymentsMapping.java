@@ -21,6 +21,9 @@ public interface TicketPaymentsMapping {
     @Update("UPDATE invente_payment_db.public.ticket_payments SET s3_url = #{s3Url}, status = 'NotVerified' WHERE ticket_id = #{ticketId}")
     int updateReceiptUrl(@Param("ticketId") UUID ticketId, @Param("s3Url") String s3Url);
 
+    @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = #{status} WHERE ticket_id = #{ticketId}")
+    int updateEmailSentStatus(@Param("ticketId") UUID ticketId, @Param("status") String status);
+
 
 
 }
