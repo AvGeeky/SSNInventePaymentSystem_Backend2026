@@ -1,4 +1,4 @@
-BEGIN;
+
 INSERT INTO public.ticket_type (ticket_type, amount)
 VALUES
     ('HACKATHON', 1200.00),
@@ -8,9 +8,8 @@ VALUES
     ('WORKSHOP', 300.00);
 
 
-BEGIN;
 
-INSERT INTO events
+INSERT INTO public.events
 (
     event_id,
     date,
@@ -2237,5 +2236,3 @@ VALUES
         NOW()
     );
 
-
-COMMIT;
