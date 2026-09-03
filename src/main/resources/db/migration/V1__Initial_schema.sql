@@ -29,7 +29,7 @@ CREATE TABLE public.users (
 
 CREATE TABLE public.events (
                         event_id UUID PRIMARY KEY,
-                        date TIMESTAMP NOT NULL,
+                        date TIMESTAMP,
                         name VARCHAR(255) NOT NULL,
                         dept_name VARCHAR(255) NOT NULL,
                         reg_count INT DEFAULT 0,
@@ -75,7 +75,7 @@ CREATE TABLE public.ticket_event (
 
 CREATE TABLE public.hackathon_regs (
                                 team_id UUID PRIMARY KEY,
-                                team_name VARCHAR(255) UNIQUE NOT NULL,
+                                team_name VARCHAR(255) NOT NULL,
                                 ticket_id UUID NOT NULL REFERENCES ticket_payments(ticket_id) ON DELETE CASCADE,
                                 domain VARCHAR(50) NOT NULL CHECK (domain IN ('Software', 'Hardware')),
                                 track VARCHAR(100),

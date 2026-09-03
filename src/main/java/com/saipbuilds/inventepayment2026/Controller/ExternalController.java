@@ -8,11 +8,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -55,5 +54,32 @@ public class ExternalController {
         response.put("message", "Save this ID. Provide it when uploading the hackathon payment receipt PDF.");
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PatchMapping("/api/v1/receipt/{ticket_id}")
+    public ResponseEntity<Map<String, String>> uploadReceipt(
+            @PathVariable("ticket_id") UUID ticketId,
+            @RequestBody Map<String, String> requestBody) {
+
+        String s3Url = requestBody.get("s3_url");
+        if (s3Url == null || s3Url.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "s3_url is required"));
+        }
+
+        externalControllerReceiverService.updateReceiptUrl(ticketId, s3Url);
+
+        return ResponseEntity.ok(Map.of("message", "Receipt uploaded successfully"));
+    }
+
+    @GetMapping("/api/v1/events")
+    public ResponseEntity<List<Map<String, Object>>> getEvents() {
+        List<Map<String, Object>> events = externalControllerReceiverService.getAllEvents();
+        return ResponseEntity.ok(events);
+    }
+
+    @GetMapping("/api/v1/hackathon-stats")
+    public ResponseEntity<Map<String, Object>> getHackathonStats() {
+        Map<String, Object> stats = externalControllerReceiverService.getHackathonStats();
+        return ResponseEntity.ok(stats);
     }
 }
