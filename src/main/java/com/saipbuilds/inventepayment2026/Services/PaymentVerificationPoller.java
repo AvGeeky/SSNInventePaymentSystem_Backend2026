@@ -23,8 +23,8 @@ public class PaymentVerificationPoller {
     private final VerificationPollingMapper pollingMapper;
     private final StringRedisTemplate redisTemplate;
 
-    private static final int DAILY_EMAIL_LIMIT = 50000;
-    private static final int MAX_BATCH_SIZE = 100;
+    private static final int DAILY_EMAIL_LIMIT = 1000;
+    private static final int MAX_BATCH_SIZE = 20;
     private static final String STREAM_KEY = "invente:payments:verified_stream";
 
     // Fires every 2 seconds. Because of @Async, if thread 1 is still working,
