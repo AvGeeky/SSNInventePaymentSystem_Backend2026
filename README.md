@@ -20,35 +20,56 @@
 
 ```mermaid
 flowchart LR
+
+    Client["External Client"]
+    InternalClient["Internal Client"]
+
+    subgraph API["API Layer"]
+        ExternalController["ExternalController"]
+        InternalController["InternalController"]
+    end
+
+    subgraph Services["Service Layer"]
+        ExternalService["ExternalControllerReceiverService"]
+        InternalService["InternalControllerReceiverService"]
+    end
+
+    subgraph Persistence["Persistence Layer"]
+        MyBatisMappers["MyBatis Mappers"]
+        PostgreSQL[("PostgreSQL")]
+    end
+
     Client --> ExternalController
     InternalClient --> InternalController
 
-    ExternalController --> ExternalService[ExternalControllerReceiverService]
-    InternalController --> InternalService[InternalControllerReceiverService]
+    ExternalController --> ExternalService
+    InternalController --> InternalService
 
     ExternalService --> MyBatisMappers
     InternalService --> MyBatisMappers
-    MyBatisMappers --> PostgreSQL
 
+    MyBatisMappers --> PostgreSQL
     InternalController --> PostgreSQL
 
-    subgraph Async Verification Pipeline
-      Poller[PaymentVerificationPoller<br/>@Scheduled + @Async + @Transactional]
-      RedisStream[(Redis Stream:<br/>invente:payments:verified_stream)]
-      Worker[PaymentEmailWorker<br/>StreamListener]
-      Sweeper[PaymentStreamSweeper<br/>reclaim pending messages]
-      EmailService[TicketEmailSenderService]
+    subgraph Async["Asynchronous Verification Pipeline"]
+        Poller["PaymentVerificationPoller<br/>@Scheduled + @Async + @Transactional"]
+        RedisStream[("Redis Stream<br/>invente:payments:verified_stream")]
+        Worker["PaymentEmailWorker<br/>StreamListener"]
+        Sweeper["PaymentStreamSweeper<br/>Pending Message Reclaimer"]
+        EmailService["TicketEmailSenderService"]
     end
 
     PostgreSQL --> Poller
     Poller --> RedisStream
+
     RedisStream --> Worker
-    Worker --> MyBatisMappers
-    Worker --> EmailService
     Sweeper --> RedisStream
     Sweeper --> Worker
 
-    EmailService --> SMTP[(SMTP)]
+    Worker --> MyBatisMappers
+    Worker --> EmailService
+
+    EmailService --> SMTP[("SMTP")]
 ```
 
 ### Why these layers exist
