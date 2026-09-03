@@ -419,8 +419,8 @@ Problem → Technique → Expected benefit:
 Repository includes **k6** script: `StressTesting/benchmark.js`
 
 - Scenario:
-  - ramp to 10 VUs in 10s
-  - hold 20 VUs for 30s
+  - ramp to 700 VUs in 10s
+  - hold 1000 VUs for 30s
   - ramp down in 10s
 - Flow tested per iteration:
   1. `POST /api/v1/register`
@@ -496,44 +496,6 @@ $env:EMAIL_KILLSWITCH='off'
 .\mvnw.cmd spring-boot:run
 ```
 
-## Docker & Infrastructure
-
-- No `Dockerfile` or `docker-compose.yml` is present in this repository.
-- Infrastructure deployment manifests are not included.
-
-## Testing
-
-Current automated test set in repo is minimal:
-
-- `Inventepayment2026ApplicationTests.contextLoads()`
-
-Run tests:
-
-```bash
-./mvnw test
-```
-
-Given architecture, highest-value future tests would target:
-
-- mapper SQL behavior under real PostgreSQL
-- poller concurrency and `SKIP LOCKED` semantics
-- worker idempotency/retry under Redis PEL reclaim
-- endpoint validation/error contract checks
-
-## Observability
-
-### What is present
-
-- SLF4J logging throughout controllers/services/workers
-- startup connectivity probe (`Databasetest`) logs DB and Redis health on boot
-- Actuator endpoints exposed for health/info/prometheus
-- app-level Micrometer tag: `application=invente_payment`
-
-### What is not evident
-
-- No distributed tracing
-- No correlation/request ID propagation
-- No structured audit logging beyond operational logs
 
 ## Engineering Decisions and Trade-offs
 
@@ -572,14 +534,3 @@ The design separates **transactional state mutation** from **slow side effects**
 - Align sweeper schedule value with intended cadence.
 - Add idempotency safeguards in worker send path (e.g., lock `email_sent='processing'` before send).
 - Add integration tests for concurrency and failure-recovery paths.
-
-## Contributing
-
-1. Create a feature branch.
-2. Keep DB changes in new Flyway migration versions.
-3. Run `./mvnw test` before opening PR.
-4. Document API/schema behavior changes in this README.
-
-## License
-
-No license file is currently present in this repository.
