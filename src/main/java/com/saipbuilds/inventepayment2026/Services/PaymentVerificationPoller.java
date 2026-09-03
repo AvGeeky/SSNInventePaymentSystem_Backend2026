@@ -12,10 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -26,7 +23,7 @@ public class PaymentVerificationPoller {
     private final VerificationPollingMapper pollingMapper;
     private final StringRedisTemplate redisTemplate;
 
-    private static final int DAILY_EMAIL_LIMIT = 1000;
+    private static final int DAILY_EMAIL_LIMIT = 50000;
     private static final int MAX_BATCH_SIZE = 100;
     private static final String STREAM_KEY = "invente:payments:verified_stream";
 
@@ -59,6 +56,9 @@ public class PaymentVerificationPoller {
 
         log.info("Thread {} polled {} newly verified payments.", Thread.currentThread().getName(), lockedBatch.size());
 
+        // 1. Create a list to hold payloads until the DB is safely committed
+        List<Map<String, String>> payloadsToPublish = new ArrayList<>();
+
         for (Map<String, Object> row : lockedBatch) {
             UUID ticketId = (UUID) row.get("ticket_id");
 
@@ -67,7 +67,7 @@ public class PaymentVerificationPoller {
             streamPayload.put("user_id", row.get("user_id").toString());
             streamPayload.put("ticket_type", row.get("ticket_type").toString());
 
-            RecordId recordId = redisTemplate.opsForStream().add(STREAM_KEY, streamPayload);
+            payloadsToPublish.add(streamPayload);
 
             pollingMapper.markAsQueued(ticketId);
         }
@@ -76,5 +76,17 @@ public class PaymentVerificationPoller {
         if (newCount != null && newCount == lockedBatch.size()) {
             redisTemplate.expire(todayKey, java.time.Duration.ofHours(24));
         }
+
+        // 2. Publish to Redis ONLY after the database successfully commits "queued"
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        for (Map<String, String> payload : payloadsToPublish) {
+                            redisTemplate.opsForStream().add(STREAM_KEY, payload);
+                        }
+                    }
+                }
+        );
     }
 }

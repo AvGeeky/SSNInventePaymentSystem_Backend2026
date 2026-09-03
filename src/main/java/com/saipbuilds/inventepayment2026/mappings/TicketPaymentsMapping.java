@@ -1,10 +1,7 @@
 package com.saipbuilds.inventepayment2026.mappings;
 
 import com.saipbuilds.inventepayment2026.entities.TicketPayments;
-import org.apache.ibatis.annotations.Insert;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Update;
+import org.apache.ibatis.annotations.*;
 
 import java.util.UUID;
 
@@ -24,6 +21,12 @@ public interface TicketPaymentsMapping {
     @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = #{status} WHERE ticket_id = #{ticketId}")
     int updateEmailSentStatus(@Param("ticketId") UUID ticketId, @Param("status") String status);
 
+    @Update("update invente_payment_db.public.ticket_payments set status='Accepted' where ticket_id=#{ticketId}")
+    int updateStatusToAcceptedForSpecificTicket(UUID ticketId);
 
+    @Select("SELECT created_at FROM invente_payment_db.public.ticket_payments WHERE ticket_id = #{ticketId}")
+    String findTicket(UUID ticketId);
 
+    @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = 'processing' WHERE ticket_id = #{ticketId} AND email_sent = 'queued'")
+    int lockEmailForProcessing(@Param("ticketId") UUID ticketId);
 }

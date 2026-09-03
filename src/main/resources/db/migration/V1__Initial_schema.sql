@@ -57,7 +57,7 @@ CREATE TABLE public.ticket_payments (
                                  amount_paid DECIMAL(10,2) NOT NULL,
                                  s3_url VARCHAR(512),
                                  status VARCHAR(50) NOT NULL CHECK (status IN ('PendingPayment', 'NotVerified', 'Accepted', 'Rejected')),
-                                 email_sent VARCHAR(50) CHECK (email_sent IN ('queued', 'sent')),
+                                 email_sent VARCHAR(50) CHECK (email_sent IN ('queued', 'processing', 'sent')),
                                  created_at TIMESTAMP DEFAULT NOW(),
                                  updated_at TIMESTAMP DEFAULT NOW()
 );
