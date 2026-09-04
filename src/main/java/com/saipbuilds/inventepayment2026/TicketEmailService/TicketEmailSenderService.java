@@ -86,7 +86,7 @@ public class TicketEmailSenderService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(System.getenv("MAIL_ID"));
+            helper.setFrom(System.getenv("MAIL_ID"),"HackInfinity 2026 Passes");
 
             String[] recipientEmails = members.stream()
                     .map(m -> (String) m.get("email"))
@@ -97,12 +97,19 @@ public class TicketEmailSenderService {
 
             helper.setReplyTo(System.getenv("MAIL_ID"), "Invente 2026 Support");
             helper.setSentDate(new Date());
+
             String htmlContent = generateHackathonHtml(paymentDetails, teamDetails, members, ticketId);
             helper.setText(htmlContent, true);
 
             byte[] qrCodeBytes = generateQRCodeBytes(ticketId.toString());
             helper.addInline("qrImage", new ByteArrayResource(qrCodeBytes), "image/png");
-
+            try {
+                org.springframework.core.io.ClassPathResource logoResource = new org.springframework.core.io.ClassPathResource("invente-orange.png");
+                byte[] logoBytes = logoResource.getInputStream().readAllBytes();
+                helper.addInline("logoImage", new ByteArrayResource(logoBytes), "image/png");
+            } catch (Exception e) {
+                log.warn("Could not attach local orange logo inline to hackathon email. Error: {}", e.getMessage());
+            }
             mailSender.send(message);
             log.info("Successfully sent hackathon email to team {} ({} recipients)", teamDetails.get("team_name"), recipientEmails.length);
 
@@ -110,38 +117,70 @@ public class TicketEmailSenderService {
             throw new RuntimeException("Failed to send hackathon email for ticket " + ticketId, e);
         }
     }
-
     private byte[] generateQRCodeBytes(String data) throws WriterException, IOException {
-        int qrSize = 300;       // Large, high-resolution QR code size
-        int padding = 20;       // Clean outer border padding
-
+        // 1. Render at higher resolution (Retina/HiDPI crispness)
+        int qrSize = 800;
+        int padding = 40;
         int totalWidth = qrSize + (padding * 2);
         int totalHeight = qrSize + (padding * 2);
 
-        // 1. Generate High Error Correction QR Code
         Map<EncodeHintType, Object> hints = new HashMap<>();
-        hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.H);
+        hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.H); // 30% recovery tolerance
         hints.put(EncodeHintType.CHARACTER_SET, "UTF-8");
         hints.put(EncodeHintType.MARGIN, 1);
 
         QRCodeWriter qrCodeWriter = new QRCodeWriter();
         BitMatrix bitMatrix = qrCodeWriter.encode(data, BarcodeFormat.QR_CODE, qrSize, qrSize, hints);
+
+        // Use ARGB or RGB with proper rendering buffer
         BufferedImage qrImage = MatrixToImageWriter.toBufferedImage(bitMatrix);
 
-        // 2. Embed Local Logo in the Center of the QR Code
+        // 2. Embed Crisp Local Logo
         try {
-            org.springframework.core.io.ClassPathResource resource = new org.springframework.core.io.ClassPathResource("invente-black.png");
+            org.springframework.core.io.ClassPathResource resource =
+                    new org.springframework.core.io.ClassPathResource("invente-black.png");
             BufferedImage logo = ImageIO.read(resource.getInputStream());
 
             if (logo != null) {
-                Graphics2D gLogo = (Graphics2D) qrImage.getGraphics();
-                int logoWidth = qrSize / 4;
+                Graphics2D gLogo = qrImage.createGraphics();
+
+                // Set maximum rendering fidelity hints
+                gLogo.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                gLogo.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                gLogo.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                gLogo.setRenderingHint(RenderingHints.KEY_ALPHA_INTERPOLATION, RenderingHints.VALUE_ALPHA_INTERPOLATION_QUALITY);
+                gLogo.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_QUALITY);
+
+                // Safe size ratio (20-22% keeps QR read rates near 100%)
+                int logoWidth = (int) (qrSize * 0.22);
                 int logoHeight = (int) (logoWidth * ((double) logo.getHeight() / logo.getWidth()));
                 int lx = (qrSize - logoWidth) / 2;
                 int ly = (qrSize - logoHeight) / 2;
 
+                int pillPadding = 16;
+
+                // Draw crisp white background plate with rounded edges
                 gLogo.setColor(Color.WHITE);
-                gLogo.fillRoundRect(lx - 8, ly - 8, logoWidth + 16, logoHeight + 16, 14, 14);
+                gLogo.fillRoundRect(
+                        lx - pillPadding,
+                        ly - pillPadding,
+                        logoWidth + (pillPadding * 2),
+                        logoHeight + (pillPadding * 2),
+                        28, 28
+                );
+
+                // Optional subtle outline to separate logo plate cleanly from QR modules
+                gLogo.setColor(new Color(226, 232, 240)); // Slate border #E2E8F0
+                gLogo.setStroke(new BasicStroke(2f));
+                gLogo.drawRoundRect(
+                        lx - pillPadding,
+                        ly - pillPadding,
+                        logoWidth + (pillPadding * 2),
+                        logoHeight + (pillPadding * 2),
+                        28, 28
+                );
+
+                // High-quality smooth scaled draw
                 gLogo.drawImage(logo, lx, ly, logoWidth, logoHeight, null);
                 gLogo.dispose();
             }
@@ -149,32 +188,31 @@ public class TicketEmailSenderService {
             log.warn("Could not embed local logo into QR code, falling back to standard QR. Error: {}", e.getMessage());
         }
 
-        // 3. Create the Pure QR Card Canvas (Square, clean, zero text)
+        // 3. Assemble Outer Card Canvas
         BufferedImage cardImage = new BufferedImage(totalWidth, totalHeight, BufferedImage.TYPE_INT_RGB);
         Graphics2D g2d = cardImage.createGraphics();
 
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
-        // Pure White Background
+        // Canvas Background
         g2d.setColor(Color.WHITE);
-        g2d.fillRoundRect(0, 0, totalWidth, totalHeight, 20, 20);
+        g2d.fillRoundRect(0, 0, totalWidth, totalHeight, 36, 36);
 
-        // Outer Vibrant Orange Tech Border Frame
+        // Frame Border
         g2d.setColor(Color.decode(THEME_COLOR));
-        g2d.setStroke(new BasicStroke(3f));
-        g2d.drawRoundRect(1, 1, totalWidth - 2, totalHeight - 2, 20, 20);
+        g2d.setStroke(new BasicStroke(6f));
+        g2d.drawRoundRect(2, 2, totalWidth - 4, totalHeight - 4, 36, 36);
 
-        // Draw the large centered QR Code with its embedded logo
+        // Draw centered QR image
         g2d.drawImage(qrImage, padding, padding, null);
-
         g2d.dispose();
 
-        // 4. Output as byte array for inline email rendering
+        // 4. Output as PNG
         ByteArrayOutputStream pngOutputStream = new ByteArrayOutputStream();
         ImageIO.write(cardImage, "PNG", pngOutputStream);
         return pngOutputStream.toByteArray();
     }
-
     private String generateTicketDetailsHtml(Map<String, Object> userDetails, List<Map<String, Object>> events, UUID ticketId) {
         StringBuilder eventsTableHtml = new StringBuilder();
 
