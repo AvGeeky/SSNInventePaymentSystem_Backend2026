@@ -17,6 +17,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleGeneral(Exception ex) {
         String errorId = java.util.UUID.randomUUID().toString();
         log.error("ID:{} An unexpected error occurred: {}", errorId, ex.getMessage());
+        if (ex.getMessage().contains("Hackathon registration limit reached")){
+            return ResponseEntity.status(400).body(
+                    Map.of("message", "Hackathon registration limit reached. No more registrations are allowed.","error_id", errorId)
+            );
+        }
         return ResponseEntity.status(500).body(
                 Map.of("message", "Something went wrong. Please try again later.","error_id", errorId)
         );

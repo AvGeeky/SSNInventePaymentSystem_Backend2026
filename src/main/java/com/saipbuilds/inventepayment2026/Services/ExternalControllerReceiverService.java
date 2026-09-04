@@ -98,6 +98,11 @@ public class ExternalControllerReceiverService {
 
     @Transactional
     public UUID handleHackathonRegistration(HackathonRegistrationRequest request) {
+        Map<String,Object> hackStats = getHackathonStats();
+        if (hackStats.get("total_registrations") != null && (Long) hackStats.get("total_registrations") >= 51) {
+            throw new IllegalStateException("Hackathon registration limit reached. No more registrations are allowed.");
+        }
+
         UUID newTicketId = createUUIDV7();
         UUID newTeamId = createUUIDV7();
         UUID eventId = eventsMapping.retrieveEventIDForHackathon();
