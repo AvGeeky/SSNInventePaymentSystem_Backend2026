@@ -213,6 +213,141 @@ public class TicketEmailSenderService {
         ImageIO.write(cardImage, "PNG", pngOutputStream);
         return pngOutputStream.toByteArray();
     }
+    public void sendPaymentReminderMail(String recipientEmail, UUID ticketId) {
+        if (!"on".equalsIgnoreCase(System.getenv("EMAIL_KILLSWITCH"))) {
+            log.info("EMAIL_KILLSWITCH is off. Skipping reminder email for {}", recipientEmail);
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(System.getenv("MAIL_ID"), "Invente 2026 Registrations");
+            helper.setTo(recipientEmail);
+            helper.setSubject("Action Required: Upload Payment Proof for Invente 2026");
+            helper.setReplyTo(System.getenv("MAIL_ID"), "Invente 2026 Support");
+            helper.setSentDate(new Date());
+
+            String uploadLink = System.getenv("BASE_UPLOAD_URL") + "/" + ticketId.toString();
+            String htmlContent = generatePaymentReminderHtml(uploadLink, ticketId);
+
+            helper.setText(htmlContent, true);
+
+            try {
+                org.springframework.core.io.ClassPathResource logoResource = new org.springframework.core.io.ClassPathResource("invente-orange.png");
+                byte[] logoBytes = logoResource.getInputStream().readAllBytes();
+                helper.addInline("logoImage", new ByteArrayResource(logoBytes), "image/png");
+            } catch (Exception e) {
+                log.warn("Could not attach local orange logo inline to reminder email. Error: {}", e.getMessage());
+            }
+
+            mailSender.send(message);
+            log.info("Successfully sent payment reminder email to {}", recipientEmail);
+
+        } catch (MessagingException | IOException e) {
+            throw new RuntimeException("Failed to send payment reminder email to " + recipientEmail, e);
+        }
+    }
+
+    private String generatePaymentReminderHtml(String uploadLink, UUID ticketId) {
+        return String.format("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset='utf-8'>
+        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    </head>
+    <body style='margin:0; padding:0; background-color:%s; font-family:"Segoe UI", Helvetica, Arial, sans-serif;'>
+        <table role='presentation' width='100%%' cellspacing='0' cellpadding='0' style='background-color:%s; padding:40px 0;'>
+            <tr>
+                <td align='center'>
+                    <table role='presentation' width='600' cellspacing='0' cellpadding='0' style='background-color:%s; border-radius:16px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,0.06); border:1px solid %s;'>
+                        
+                        <tr>
+                            <td style='height:6px; background:linear-gradient(90deg, %s, #FFA726);'></td>
+                        </tr>
+                        
+                        <tr>
+                            <td style='padding:45px 40px;'>
+                                
+                                <table role='presentation' width='100%%' cellspacing='0' cellpadding='0'>
+                                    <tr>
+                                        <td align='center' style='padding-bottom:30px;'>
+                                            <img src='cid:logoImage' alt='Invente Logo' width='170' style='display:block; border:0;'>
+                                        </td>
+                                    </tr>
+                                </table>
+                                
+                                <div style='text-align:center; margin-bottom:35px;'>
+                                    <h1 style='color:%s; font-size:24px; font-weight:700; margin:0 0 12px 0; letter-spacing:-0.5px;'>Action Required</h1>
+
+                                    <p style='font-size:15px; color:%s; margin:0 0 25px 0; line-height:1.6;'>
+                                        Please upload the payment receipt PDF from <strong>RazorPay</strong> that was sent to your email inbox to complete your registration.
+                                    </p>
+
+                                    <!-- Informational Context Box -->
+                                    <div style='background-color:%s; border:1px solid %s; border-radius:10px; padding:16px 20px; display:inline-block; text-align:left; max-width:85%%;'>
+                                        <p style='font-size:13px; color:%s; margin:0 0 10px 0; line-height:1.6;text-align:center;'>
+                                            <strong style='color:%s;'>⏱ Processing:</strong> You will receive your Event Pass within <strong>3-4 working days</strong> after submitting your payment proof.
+                                        </p>
+
+                                        <div style='border-top:1px dashed %s; margin:10px 0; height:1px;'></div>
+
+                                        <p style='font-size:12px; color:%s; margin:0; line-height:1.5; font-style:italic; text-align:center;'>
+                                            Ignore this email if you have already completed this step.
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Call to Action Box -->
+                                <table role='presentation' width='100%%' cellspacing='0' cellpadding='0' style='background-color:%s; border:1px solid %s; border-radius:10px; margin-bottom:30px; text-align:center;'>
+                                    <tr>
+                                        <td style='padding:30px 24px;'>
+                                            <a href='%s' style='display:inline-block; padding:14px 28px; background-color:%s; color:#FFFFFF; text-decoration:none; font-weight:600; border-radius:8px; font-size:14px; box-shadow:0 4px 12px rgba(220,132,0,0.25);'>Upload Payment Proof</a>
+                                        </td>
+                                    </tr>
+                                </table>
+                                
+                                <div style='text-align:center; margin-bottom:35px;'>
+                                    <p style='font-size:13px; color:%s; margin:0;'>Your Ticket ID: <br><strong style='color:%s; font-family:Consolas, monospace;'>%s</strong></p>
+                                </div>
+                        
+                                <div style='text-align:center; border-top:1px solid %s; padding-top:25px;'>
+                                    <p style='color:%s; font-size:12px; line-height:1.6; margin:0 0 10px 0;'>
+                                        Sent by <strong>Invente 2026 Payment System</strong>.<br>
+                                        Payment System Built by <a href='https://www.linkedin.com/in/saipranav-m/' target='_blank' style='color:%s; text-decoration:none; font-weight:600;'>Saipranav M</a>.<br>
+                                        Attendance System Built by <a href='https://www.linkedin.com/in/pranav-vijay-524410329/' target='_blank' style='color:%s; text-decoration:none; font-weight:600;'>Pranav Vijay</a> and <a href='https://linkedin.com/in/pranav-krishna-p' target='_blank' style='color:%s; text-decoration:none; font-weight:600;'>Pranav Krishna</a>.
+                                    </p>
+                                </div>
+                                
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """,
+                // 1-4: Body & Main Tables
+                BG_LIGHT, BG_LIGHT, CARD_BG, BORDER_COLOR,
+                // 5: Top Gradient
+                THEME_COLOR,
+                // 6-7: Main Headers
+                THEME_DARK, TEXT_MUTED,
+                // 8-13: Informational Context Box
+                BG_LIGHT, BORDER_COLOR, TEXT_MUTED, THEME_DARK, BORDER_COLOR, TEXT_MUTED,
+                // 14-15: CTA Wrapper Table
+                BG_LIGHT, BORDER_COLOR,
+                // 16-17: CTA Button
+                uploadLink, THEME_COLOR,
+                // 18-20: Ticket ID
+                TEXT_MUTED, THEME_DARK, ticketId.toString(),
+                // 21-25: Footer Lines & Links
+                BORDER_COLOR, TEXT_MUTED, THEME_COLOR, THEME_COLOR, THEME_COLOR
+        );
+    }
     private String generateTicketDetailsHtml(Map<String, Object> userDetails, List<Map<String, Object>> events, UUID ticketId) {
         StringBuilder eventsTableHtml = new StringBuilder();
 
@@ -330,7 +465,7 @@ public class TicketEmailSenderService {
                                             <p style='color:%s; font-size:12px; line-height:1.6; margin:0 0 10px 0;'>
                                                 Sent by <strong>Invente 2026 Payment System</strong>.<br>
                                                 Payment System Built by <a href='https://www.linkedin.com/in/saipranav-m/' target='_blank' style='color:%s; text-decoration:none; font-weight:600;'>Saipranav M</a>.
-                                                Attendance System Built by Pranav Krishna and Pranav Vijay.
+                                                Attendance System Built by <a href='https://www.linkedin.com/in/pranav-vijay-524410329/' target='_blank' text-decoration:none; font-weight:600;'>Pranav Vijay </a> and <a href='https://linkedin.com/in/pranav-krishna-p' target='_blank' text-decoration:none; font-weight:600;'>Pranav Krishna </a>.
                                             </p>
                                             <p style='color:#94A3B8; font-size:11px; margin:0;'>
                                                 Please present the QR badge directly at the venue scanner checkpoints.
@@ -501,7 +636,7 @@ public class TicketEmailSenderService {
                                             <p style='color:%s; font-size:12px; line-height:1.6; margin:0 0 10px 0;'>
                                                 Sent by <strong>Invente 2026 Payment System</strong>.<br>
                                                 Payment System Built by <a href='https://www.linkedin.com/in/saipranav-m/' target='_blank' style='color:%s; text-decoration:none; font-weight:600;'>Saipranav M</a>.
-                                                Attendance System Built by Pranav Krishna and Pranav Vijay.
+                                                Attendance System Built by <a href='https://www.linkedin.com/in/pranav-vijay-524410329/' target='_blank' text-decoration:none; font-weight:600;'>Pranav Vijay </a> and <a href='https://linkedin.com/in/pranav-krishna-p' target='_blank' text-decoration:none; font-weight:600;'>Pranav Krishna </a>.
                                             </p>
                                             <p style='color:#94A3B8; font-size:11px; margin:0;'>
                                                 Please carry valid college identification cards alongside this digital pass.

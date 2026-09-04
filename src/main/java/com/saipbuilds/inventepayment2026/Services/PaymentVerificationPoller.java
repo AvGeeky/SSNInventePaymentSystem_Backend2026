@@ -27,8 +27,6 @@ public class PaymentVerificationPoller {
     private static final int MAX_BATCH_SIZE = 20;
     private static final String STREAM_KEY = "invente:payments:verified_stream";
 
-    // Fires every 2 seconds. Because of @Async, if thread 1 is still working,
-    // thread 2 will spawn and grab the next batch simultaneously.
     @Async("pollerExecutor")
     @Scheduled(fixedRate = 2000)
     @Transactional
@@ -41,7 +39,6 @@ public class PaymentVerificationPoller {
         int remainingQuota = DAILY_EMAIL_LIMIT - currentCount;
 
         if (remainingQuota <= 0) {
-
             log.trace("Daily email limit of {} reached. Poller sleeping.", DAILY_EMAIL_LIMIT);
             return;
         }
@@ -56,16 +53,18 @@ public class PaymentVerificationPoller {
 
         log.info("Thread {} polled {} newly verified payments.", Thread.currentThread().getName(), lockedBatch.size());
 
-        // 1. Create a list to hold payloads until the DB is safely committed
         List<Map<String, String>> payloadsToPublish = new ArrayList<>();
 
         for (Map<String, Object> row : lockedBatch) {
             UUID ticketId = (UUID) row.get("ticket_id");
+            String ticketType = row.get("ticket_type").toString();
 
             Map<String, String> streamPayload = new HashMap<>();
             streamPayload.put("ticket_id", ticketId.toString());
             streamPayload.put("user_id", row.get("user_id").toString());
-            streamPayload.put("ticket_type", row.get("ticket_type").toString());
+            streamPayload.put("ticket_type", ticketType);
+
+            streamPayload.put("email_type", ticketType.equalsIgnoreCase("HACKATHON") ? "hack" : "tech");
 
             payloadsToPublish.add(streamPayload);
 
@@ -77,7 +76,6 @@ public class PaymentVerificationPoller {
             redisTemplate.expire(todayKey, java.time.Duration.ofHours(24));
         }
 
-        // 2. Publish to Redis ONLY after the database successfully commits "queued"
         org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
                 new org.springframework.transaction.support.TransactionSynchronization() {
                     @Override

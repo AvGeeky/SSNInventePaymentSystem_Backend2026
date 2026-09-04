@@ -31,7 +31,7 @@ public class PaymentStreamSweeper {
     private static final String SWEEPER_NODE = "sweeper-node";
 
     // Runs every 5 minutes (300,000 milliseconds)
-    @Scheduled(fixedDelay = 60)
+    @Scheduled(fixedDelay = 300000)
     public void reclaimStuckMessages() {
         
         // 1. Query the PEL for up to 100 pending messages
