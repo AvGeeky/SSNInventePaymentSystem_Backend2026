@@ -21,10 +21,8 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -33,7 +31,6 @@ public class TicketEmailSenderService {
 
     private final JavaMailSender mailSender;
 
-    private static final String LOGO_URL = "https://res.cloudinary.com/gmc4sq72/image/upload/v1788458673/invente-orange_1.png";
     private static final String THEME_COLOR = "#dc8400";         // Vibrant Tech Orange
     private static final String THEME_DARK = "#1A1A1A";          // Premium Dark Charcoal
     private static final String BG_LIGHT = "#F8F9FA";          // Modern Clean Canvas Background
@@ -53,16 +50,24 @@ public class TicketEmailSenderService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(System.getenv("MAIL_ID"));
+            helper.setFrom(System.getenv("MAIL_ID"),"Invente 2026 Passes");
             helper.setTo(recipientEmail);
-            helper.setSubject("Your Official Invente 2026 Entry Pass is here!");
+            helper.setSubject("Your Invente 2026 Entry Pass is here!");
+            helper.setReplyTo(System.getenv("MAIL_ID"), "Invente 2026 Support");
+            helper.setSentDate(new Date());
 
             String htmlContent = generateTicketDetailsHtml(userDetails, events, ticketId);
             helper.setText(htmlContent, true);
 
             byte[] qrCodeBytes = generateQRCodeBytes(ticketId.toString());
             helper.addInline("qrImage", new ByteArrayResource(qrCodeBytes), "image/png");
-
+            try {
+                org.springframework.core.io.ClassPathResource logoResource = new org.springframework.core.io.ClassPathResource("invente-orange.png");
+                byte[] logoBytes = logoResource.getInputStream().readAllBytes();
+                helper.addInline("logoImage", new ByteArrayResource(logoBytes), "image/png");
+            } catch (Exception e) {
+                log.warn("Could not attach local orange logo inline, falling back or failing. Error: {}", e.getMessage());
+            }
             mailSender.send(message);
             log.info("Successfully sent ticket email to {}", recipientEmail);
 
@@ -88,8 +93,10 @@ public class TicketEmailSenderService {
                     .toArray(String[]::new);
 
             helper.setTo(recipientEmails);
-            helper.setSubject("HackInfinity 2026 Confirmation - Team: " + teamDetails.get("team_name"));
+            helper.setSubject("Your HackInfinity 2026 Confirmation - Team: " + teamDetails.get("team_name"));
 
+            helper.setReplyTo(System.getenv("MAIL_ID"), "Invente 2026 Support");
+            helper.setSentDate(new Date());
             String htmlContent = generateHackathonHtml(paymentDetails, teamDetails, members, ticketId);
             helper.setText(htmlContent, true);
 
@@ -123,7 +130,7 @@ public class TicketEmailSenderService {
 
         // 2. Embed Local Logo in the Center of the QR Code
         try {
-            org.springframework.core.io.ClassPathResource resource = new org.springframework.core.io.ClassPathResource("invente-orange.png");
+            org.springframework.core.io.ClassPathResource resource = new org.springframework.core.io.ClassPathResource("invente-black.png");
             BufferedImage logo = ImageIO.read(resource.getInputStream());
 
             if (logo != null) {
@@ -214,7 +221,7 @@ public class TicketEmailSenderService {
                                         <table role='presentation' width='100%%' cellspacing='0' cellpadding='0'>
                                             <tr>
                                                 <td align='center' style='padding-bottom:30px;'>
-                                                    <img src='%s' alt='Invente Logo' width='170' style='display:block; border:0;'>
+                                                    <img src='cid:logoImage' alt='Invente Logo' width='170' style='display:block; border:0;'>
                                                 </td>
                                             </tr>
                                         </table>
@@ -303,7 +310,7 @@ public class TicketEmailSenderService {
             """,
                 BG_LIGHT, BG_LIGHT, CARD_BG, BORDER_COLOR,
                 THEME_COLOR,
-                LOGO_URL,
+
                 THEME_DARK, TEXT_MUTED, THEME_DARK, userDetails.get("name"),
                 BG_LIGHT, BORDER_COLOR,
                 TEXT_MUTED,
@@ -380,7 +387,7 @@ public class TicketEmailSenderService {
                                         <table role='presentation' width='100%%' cellspacing='0' cellpadding='0'>
                                             <tr>
                                                 <td align='center' style='padding-bottom:30px;'>
-                                                    <img src='%s' alt='Invente Logo' width='170' style='display:block; border:0;'>
+                                                    <img src='cid:logoImage' alt='Invente Logo' width='170' style='display:block; border:0;'>
                                                 </td>
                                             </tr>
                                         </table>
@@ -474,7 +481,7 @@ public class TicketEmailSenderService {
             """,
                 BG_LIGHT, BG_LIGHT, CARD_BG, BORDER_COLOR,
                 THEME_COLOR,
-                LOGO_URL,
+
                 THEME_DARK, TEXT_MUTED, THEME_COLOR, teamDetails.get("team_name"),
                 BG_LIGHT, BORDER_COLOR,
                 TEXT_MUTED,

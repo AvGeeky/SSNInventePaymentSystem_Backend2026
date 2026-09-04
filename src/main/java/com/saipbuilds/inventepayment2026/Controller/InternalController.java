@@ -42,7 +42,7 @@ public class InternalController {
         // Send Response
         Map<String, Object> response = new HashMap<>();
         response.put("ticket_id", ticketId);
-        response.put("message", "Save this ID. Provide it when uploading the payment receipt PDF.");
+        response.put("message", "Approved!");
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
