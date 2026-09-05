@@ -37,6 +37,6 @@ public interface TicketPaymentsMapping {
     @Update("UPDATE invente_payment_db.public.ticket_payments SET reminder_email_sent = 'sent' WHERE ticket_id = #{ticketId}")
     int updateReminderEmailSentStatus(@Param("ticketId") UUID ticketId);
 
-//    @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = 'processing' WHERE ticket_id = #{ticketId} AND email_sent = 'queued'")
-//    int lockEmailForProcessing(@Param("ticketId") UUID ticketId);
+    @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = 'processing' WHERE ticket_id = #{ticketId}")
+    int shiftEmailForManualProcessing(@Param("ticketId") UUID ticketId);
 }

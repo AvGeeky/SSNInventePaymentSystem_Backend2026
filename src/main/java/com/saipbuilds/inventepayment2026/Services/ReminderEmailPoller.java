@@ -61,6 +61,7 @@ public class ReminderEmailPoller {
             UUID ticketId = (UUID) row.get("ticket_id");
             String recipientEmail = (String) row.get("email");
 
+
             Map<String, String> streamPayload = new HashMap<>();
             streamPayload.put("ticket_id", ticketId.toString());
             streamPayload.put("recipient_email", recipientEmail);

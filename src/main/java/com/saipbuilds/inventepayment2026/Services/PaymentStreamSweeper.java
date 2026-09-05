@@ -1,5 +1,6 @@
 package com.saipbuilds.inventepayment2026.Services;
 
+import com.saipbuilds.inventepayment2026.mappings.TicketPaymentsMapping;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Range;
@@ -15,6 +16,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -30,6 +32,7 @@ public class PaymentStreamSweeper {
     private static final String CONSUMER_GROUP = "email-workers-group";
     private static final String SWEEPER_NODE = "sweeper-node";
     private static final int CLAIM_IDLE_TIME = 5;
+    private final TicketPaymentsMapping ticketPaymentsMapping;
 
     // Runs every 5 minutes
     @Scheduled(fixedDelay = 300000)
@@ -47,9 +50,35 @@ public class PaymentStreamSweeper {
             return;
         }
 
-        // 2. Filter for messages that have been stuck for more than 5 minutes
         List<RecordId> stuckRecordIds = pendingMessages.stream()
                 .filter(msg -> msg.getElapsedTimeSinceLastDelivery().toMinutes() >= CLAIM_IDLE_TIME)
+                .filter(msg -> {
+                    // Poison Pill Protection: If it failed more than 3 times, drop it
+                    if (msg.getTotalDeliveryCount() > 3) {
+                        log.error("POISON PILL DETECTED: Record ID {} has failed {} times. Acknowledging and dropping permanently.",
+                                msg.getId(), msg.getTotalDeliveryCount());
+
+                        // 1. Fetch the actual message body/payload from Redis to get the ticket_id
+                        List<MapRecord<String, Object, Object>> recordDetails = redisTemplate.opsForStream().range(
+                                STREAM_KEY,
+                                Range.closed(msg.getId().getValue(), msg.getId().getValue())
+                        );
+
+                        if (recordDetails != null && !recordDetails.isEmpty()) {
+                            Object ticketIdObj = recordDetails.get(0).getValue().get("ticket_id");
+                            if (ticketIdObj != null) {
+                                UUID ticketId = UUID.fromString(ticketIdObj.toString());
+                                ticketPaymentsMapping.shiftEmailForManualProcessing(ticketId);
+                            }
+                        }
+
+
+                        redisTemplate.opsForStream().acknowledge(STREAM_KEY, CONSUMER_GROUP, msg.getId());
+
+                        return false; // Skip claiming this message
+                    }
+                    return true;
+                })
                 .map(PendingMessage::getId)
                 .toList();
 
