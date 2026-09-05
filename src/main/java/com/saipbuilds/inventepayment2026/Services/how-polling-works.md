@@ -6,10 +6,11 @@ The lifecycle of a payment processing event flows through four distinct componen
 
 ### 1. The Pollers (`PaymentVerificationPoller` & `ReminderEmailPoller`)
 
-* **Trigger:** Run every 2 seconds via `@Scheduled` on a separate dedicated 5 thread pools.
-* **Batching:** Fetch up to 20 eligible payments from PostgreSQL per run, respecting a shared hard daily limit of 1000 emails tracked via Redis keys.
+* **Trigger:** `PaymentVerificationPoller` executes every 30 seconds (`30000` ms) and `ReminderEmailPoller` executes every 10 seconds (`10000` ms), dynamically configured via environment variables. Each utilizes its own isolated 5-thread pool (`verificationPollerExecutor` and `reminderPollerExecutor`) to prevent queue contention.
+* **Batching:** Fetch up to 20 eligible payments from PostgreSQL per run, respecting a shared hard daily limit of 1000 emails tracked via atomic Redis keys.
+* **Grace Period:** The `ReminderEmailPoller` strictly targets pending tickets lacking an uploaded receipt (`s3_url IS NULL`) and enforces a 3-minute delay (`created_at <= NOW() - INTERVAL '3 minutes'`) to give users time to complete transactions before triggering alerts.
 * **Payload Routing:** Inject an `email_type` flag (`tech`, `hack`, or `payment_reminder`) into the payload to dictate downstream worker behavior.
-* **State Update:** Mark the fetched database rows as `queued` (updating either the `email_sent` or `reminder_email_sent` columns, depending on the poller).
+* **State Update:** Mark the fetched database rows as `queued` (updating either the `email_sent` or `reminder_email_sent` columns) via `FOR UPDATE OF tps SKIP LOCKED` queries utilizing partial indexes.
 * **Transaction Synchronization:** To prevent a race condition where workers pull messages before the database commit finishes, the Pollers use `TransactionSynchronizationManager.afterCommit()`. They only execute the Redis `XADD` command to publish the payload after PostgreSQL confirms the `queued` state is permanently saved.
 
 ### 2. The Message Broker (Redis Streams)
@@ -28,14 +29,14 @@ The lifecycle of a payment processing event flows through four distinct componen
 ### 4. Fault Tolerance (`PaymentStreamSweeper`)
 
 * **Failure State:** If an `EmailWorker` thread crashes or hangs mid-process, the database remains marked as `queued` and the message sits unacknowledged in the Redis PEL indefinitely.
-* **Recovery:** A background `@Scheduled` sweeper runs every 5 minutes. It queries the PEL (`XPENDING`) for any messages that have been stuck for 5 minutes or longer.
+* **Recovery:** A background `@Scheduled` sweeper runs every 5 minutes. It queries the PEL (`XPENDING`) for any messages that have been stuck for 1 minute or longer.
 * **Re-routing:** Using the `XCLAIM` command, the sweeper forcefully strips ownership of the message from the dead worker thread and pipes the payload directly back into the `PaymentEmailWorker.onMessage()` method for reprocessing.
 
 ## Thread Pool Isolation
 
-To prevent thread exhaustion cascading across the application, the system strictly isolates blocking operations:
+To prevent thread exhaustion cascading across the application, the system strictly isolates blocking operations into three separated domains:
 
-* **Poller Pool:** 5 threads (`PollerWorker-`) dedicated exclusively to querying PostgreSQL and publishing to Redis. Backed by a queue capacity of 50 to absorb database slowdowns across multiple pollers.
+* **Poller Pools:** 5 threads dedicated to querying verified payments (`verificationPollerExecutor`) and 5 threads dedicated to querying pending reminders (`reminderPollerExecutor`). Backed by queue capacities of 50 to absorb database slowdowns without crossing over.
 * **Worker Pool:** 5 threads (`EmailWorker-`) dedicated exclusively to executing the slow SMTP/PDF generation tasks.
 * **Database Pool (Hikari):** Worker methods are intentionally **not** `@Transactional` (except for the final micro-update). This ensures long-running email network calls do not hold database connections hostage, preserving the Hikari pool for external web traffic.
 
@@ -43,4 +44,4 @@ To prevent thread exhaustion cascading across the application, the system strict
 
 **At-Least-Once Delivery:** This pipeline prioritizes architectural simplicity over strict exactly-once processing. It does not employ atomic locking on the worker side.
 
-* **The Zombie Worker Scenario:** If an original worker thread stalls for >5 minutes, the Sweeper will claim and reprocess the message. If the original worker later wakes up and finishes its execution, a duplicate email will be sent. This minor redundancy is accepted as a standard tradeoff to avoid the complexity and overhead of distributed database locks.
+* **The Zombie Worker Scenario:** If an original worker thread stalls for >1 minute, the Sweeper will claim and reprocess the message. If the original worker later wakes up and finishes its execution, a duplicate email will be sent. This minor redundancy is accepted as a standard tradeoff to avoid the complexity and overhead of distributed database locks.
