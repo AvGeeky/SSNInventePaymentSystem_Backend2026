@@ -60,6 +60,7 @@ CREATE TABLE public.ticket_payments (
                                  email_sent VARCHAR(50) CHECK (email_sent IN ('queued', 'processing', 'sent')),
                                  created_at TIMESTAMP DEFAULT NOW(),
                                  updated_at TIMESTAMP DEFAULT NOW()
+
 );
 
 -- 4. Dependent Tables (Level 2)

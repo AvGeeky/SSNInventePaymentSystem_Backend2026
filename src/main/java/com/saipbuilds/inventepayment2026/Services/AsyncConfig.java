@@ -11,13 +11,24 @@ import java.util.concurrent.Executor;
 @EnableAsync
 public class AsyncConfig {
 
-    @Bean(name = "pollerExecutor")
-    public Executor pollerExecutor() {
+    @Bean(name = "verificationPollerExecutor")
+    public Executor verificationPollerExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(5);
         executor.setMaxPoolSize(5);
-        executor.setQueueCapacity(50); // How many triggers can wait if all 5 threads are busy
-        executor.setThreadNamePrefix("PollerWorker-");
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("verificationPollerWorker-");
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean(name = "reminderPollerExecutor")
+    public Executor reminderPollerExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(5);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("reminderPollerWorker-");
         executor.initialize();
         return executor;
     }

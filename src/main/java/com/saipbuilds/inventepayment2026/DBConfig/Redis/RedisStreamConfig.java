@@ -39,7 +39,7 @@ public class RedisStreamConfig {
             log.debug("Consumer group {} already exists.", CONSUMER_GROUP);
         }
 
-        // 2. Create a dedicated 5-thread executor for the workers
+        // 2. Create a dedicated 5-thread executor for the EMAIL workers
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(5);
         executor.setMaxPoolSize(5);

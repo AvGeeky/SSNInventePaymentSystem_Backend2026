@@ -29,8 +29,9 @@ public class PaymentStreamSweeper {
     private static final String STREAM_KEY = "invente:payments:verified_stream";
     private static final String CONSUMER_GROUP = "email-workers-group";
     private static final String SWEEPER_NODE = "sweeper-node";
+    private static final int CLAIM_IDLE_TIME = 5;
 
-    // Runs every 5 minutes (300,000 milliseconds)
+    // Runs every 5 minutes
     @Scheduled(fixedDelay = 300000)
     public void reclaimStuckMessages() {
         
@@ -48,7 +49,7 @@ public class PaymentStreamSweeper {
 
         // 2. Filter for messages that have been stuck for more than 5 minutes
         List<RecordId> stuckRecordIds = pendingMessages.stream()
-                .filter(msg -> msg.getElapsedTimeSinceLastDelivery().toMinutes() >= 5)
+                .filter(msg -> msg.getElapsedTimeSinceLastDelivery().toMinutes() >= CLAIM_IDLE_TIME)
                 .map(PendingMessage::getId)
                 .toList();
 
@@ -63,7 +64,7 @@ public class PaymentStreamSweeper {
                 STREAM_KEY,
                 CONSUMER_GROUP,
                 SWEEPER_NODE,
-                Duration.ofMinutes(5),
+                Duration.ofMinutes(CLAIM_IDLE_TIME),
                 stuckRecordIds.toArray(new RecordId[0])
         );
 

@@ -32,7 +32,6 @@ public class ExternalControllerReceiverService {
     private final HackathonMembersMapping hackathonMembersMapping;
     private final EventsMapping eventsMapping;
 
-    // --- NEW: Inject Redis Template ---
     private final StringRedisTemplate redisTemplate;
 
     private UUID createUUIDV7() {
@@ -80,18 +79,16 @@ public class ExternalControllerReceiverService {
                 ticketEventMapping.insert_ticket_event(ticketEvent);
             }
         }
-
-        // --- NEW: Push Payment Reminder to Stream ONLY if DB transaction succeeds ---
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                Map<String, String> payload = new HashMap<>();
-                payload.put("ticket_id", newTicketId.toString());
-                payload.put("email_type", "payment_reminder");
-                payload.put("recipient_email", request.getEmail());
-                redisTemplate.opsForStream().add("invente:payments:verified_stream", payload);
-            }
-        });
+//        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+//            @Override
+//            public void afterCommit() {
+//                Map<String, String> payload = new HashMap<>();
+//                payload.put("ticket_id", newTicketId.toString());
+//                payload.put("email_type", "payment_reminder");
+//                payload.put("recipient_email", request.getEmail());
+//                redisTemplate.opsForStream().add("invente:payments:verified_stream", payload);
+//            }
+//        });
 
         return newTicketId;
     }
@@ -177,17 +174,16 @@ public class ExternalControllerReceiverService {
             }
         }
 
-        // --- NEW: Push Payment Reminder to Stream ONLY if DB transaction succeeds ---
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                Map<String, String> payload = new HashMap<>();
-                payload.put("ticket_id", newTicketId.toString());
-                payload.put("email_type", "payment_reminder");
-                payload.put("recipient_email", request.getLeader().getEmail());
-                redisTemplate.opsForStream().add("invente:payments:verified_stream", payload);
-            }
-        });
+//        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+//            @Override
+//            public void afterCommit() {
+//                Map<String, String> payload = new HashMap<>();
+//                payload.put("ticket_id", newTicketId.toString());
+//                payload.put("email_type", "payment_reminder");
+//                payload.put("recipient_email", request.getLeader().getEmail());
+//                redisTemplate.opsForStream().add("invente:payments:verified_stream", payload);
+//            }
+//        });
 
         return newTicketId;
     }

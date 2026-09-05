@@ -38,9 +38,15 @@ public class PaymentEmailWorker implements StreamListener<String, MapRecord<Stri
                 String recipientEmail = payload.get("recipient_email");
 
                 emailSenderService.sendPaymentReminderMail(recipientEmail, ticketId);
-                redisTemplate.opsForStream().acknowledge("invente:payments:verified_stream", "email-workers-group", recordId);
 
-                log.info("Successfully processed payment_reminder email for ticket {}", ticketId);
+                int s = ticketPaymentsMapping.updateReminderEmailSentStatus(ticketId);
+                if (s==1){
+                    log.info("Successfully updated reminder_email_sent status for ticket {}", ticketId);
+                } else {
+                    log.error("Failed to update reminder_email_sent status for ticket {}", ticketId);
+                    throw new Exception("Failed to update reminder_email_sent status for ticket " + ticketId);
+                }
+                redisTemplate.opsForStream().acknowledge("invente:payments:verified_stream", "email-workers-group", recordId);
                 return;
             }
 
@@ -64,7 +70,13 @@ public class PaymentEmailWorker implements StreamListener<String, MapRecord<Stri
                 emailSenderService.sendTicketPurchaseMail(paymentDetails, bookedEvents, ticketId);
             }
 
-            ticketPaymentsMapping.updateEmailSentStatus(ticketId, "sent");
+            int s =ticketPaymentsMapping.updateEmailSentStatus(ticketId);
+            if (s==1){
+                log.info("Successfully updated email_sent status for ticket {}", ticketId);
+            } else {
+                log.error("Failed to update email_sent status for ticket {}", ticketId);
+                throw new Exception("Failed to update email_sent status for ticket " + ticketId);
+            }
 
             redisTemplate.opsForStream().acknowledge("invente:payments:verified_stream", "email-workers-group", recordId);
             log.info("Successfully processed and XACKed final ticket {}", ticketId);

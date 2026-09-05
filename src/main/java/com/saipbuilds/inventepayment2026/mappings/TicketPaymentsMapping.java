@@ -18,8 +18,6 @@ public interface TicketPaymentsMapping {
     @Update("UPDATE invente_payment_db.public.ticket_payments SET s3_url = #{s3Url}, status = 'NotVerified' WHERE ticket_id = #{ticketId}")
     int updateReceiptUrl(@Param("ticketId") UUID ticketId, @Param("s3Url") String s3Url);
 
-    @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = #{status} WHERE ticket_id = #{ticketId}")
-    int updateEmailSentStatus(@Param("ticketId") UUID ticketId, @Param("status") String status);
 
     @Update("update invente_payment_db.public.ticket_payments set status='Accepted' where ticket_id=#{ticketId}")
     int updateStatusToAcceptedForSpecificTicket(UUID ticketId);
@@ -27,6 +25,18 @@ public interface TicketPaymentsMapping {
     @Select("SELECT created_at FROM invente_payment_db.public.ticket_payments WHERE ticket_id = #{ticketId}")
     String findTicket(UUID ticketId);
 
-    @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = 'processing' WHERE ticket_id = #{ticketId} AND email_sent = 'queued'")
-    int lockEmailForProcessing(@Param("ticketId") UUID ticketId);
+    @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = 'queued' WHERE ticket_id = #{ticketId} AND status='Accepted' AND email_sent IS NULL")
+    void markAsQueued(@Param("ticketId") UUID ticketId);
+
+    @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = 'sent' WHERE ticket_id = #{ticketId} AND email_sent = 'queued'")
+    int updateEmailSentStatus(@Param("ticketId") UUID ticketId);
+
+    @Update("UPDATE invente_payment_db.public.ticket_payments SET reminder_email_sent = 'queued' WHERE ticket_id = #{ticketId} AND reminder_email_sent IS NULL")
+    void markReminderEmailAsQueued(@Param("ticketId") UUID ticketId);
+
+    @Update("UPDATE invente_payment_db.public.ticket_payments SET reminder_email_sent = 'sent' WHERE ticket_id = #{ticketId}")
+    int updateReminderEmailSentStatus(@Param("ticketId") UUID ticketId);
+
+//    @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = 'processing' WHERE ticket_id = #{ticketId} AND email_sent = 'queued'")
+//    int lockEmailForProcessing(@Param("ticketId") UUID ticketId);
 }

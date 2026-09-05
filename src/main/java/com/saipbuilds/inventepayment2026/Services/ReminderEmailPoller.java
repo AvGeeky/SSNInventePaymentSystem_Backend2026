@@ -1,6 +1,7 @@
 package com.saipbuilds.inventepayment2026.Services;
 
 import com.saipbuilds.inventepayment2026.mappings.TicketPaymentsMapping;
+import com.saipbuilds.inventepayment2026.mappings.UsersMapping;
 import com.saipbuilds.inventepayment2026.mappings.VerificationMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +18,7 @@ import java.util.*;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class PaymentVerificationPoller {
+public class ReminderEmailPoller {
 
     private final VerificationMapper verificationMapper;
     private final StringRedisTemplate redisTemplate;
@@ -26,9 +27,10 @@ public class PaymentVerificationPoller {
     private static final int MAX_BATCH_SIZE = 20;
     private static final String STREAM_KEY = "invente:payments:verified_stream";
     private final TicketPaymentsMapping ticketPaymentsMapping;
+    private final UsersMapping usersMapping;
 
-    @Async("verificationPollerExecutor")
-    @Scheduled(fixedRateString = "${PAYMENT_VERIFICATION_POLLER_RATE:2000}")
+    @Async("reminderPollerExecutor")
+    @Scheduled(fixedRateString = "${REMINDER_POLLER_RATE:2000}")
     @Transactional
     public void pollAndPublishVerifiedPayments() {
 
@@ -45,7 +47,7 @@ public class PaymentVerificationPoller {
 
         int fetchSize = Math.min(MAX_BATCH_SIZE, remainingQuota);
 
-        List<Map<String, Object>> lockedBatch = verificationMapper.fetchLockedBatch(fetchSize);
+        List<Map<String, Object>> lockedBatch = verificationMapper.fetchReminderSendableLockedBatch(fetchSize);
 
         if (lockedBatch.isEmpty()) {
             return;
@@ -57,18 +59,16 @@ public class PaymentVerificationPoller {
 
         for (Map<String, Object> row : lockedBatch) {
             UUID ticketId = (UUID) row.get("ticket_id");
-            String ticketType = row.get("ticket_type").toString();
+            String recipientEmail = (String) row.get("email");
 
             Map<String, String> streamPayload = new HashMap<>();
             streamPayload.put("ticket_id", ticketId.toString());
-            streamPayload.put("user_id", row.get("user_id").toString());
-            streamPayload.put("ticket_type", ticketType);
-
-            streamPayload.put("email_type", ticketType.equalsIgnoreCase("HACKATHON") ? "hack" : "tech");
+            streamPayload.put("recipient_email", recipientEmail);
+            streamPayload.put("email_type", "payment_reminder");
 
             payloadsToPublish.add(streamPayload);
 
-            ticketPaymentsMapping.markAsQueued(ticketId);
+            ticketPaymentsMapping.markReminderEmailAsQueued(ticketId);
         }
 
 
