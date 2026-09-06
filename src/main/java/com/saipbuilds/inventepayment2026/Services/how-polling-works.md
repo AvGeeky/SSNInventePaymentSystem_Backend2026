@@ -31,6 +31,7 @@ The lifecycle of a payment processing event flows through four distinct componen
 * **Failure State:** If an `EmailWorker` thread crashes or hangs mid-process, the database remains marked as `queued` and the message sits unacknowledged in the Redis PEL indefinitely.
 * **Recovery:** A background `@Scheduled` sweeper runs every 5 minutes. It queries the PEL (`XPENDING`) for any messages that have been stuck for 1 minute or longer.
 * **Re-routing:** Using the `XCLAIM` command, the sweeper forcefully strips ownership of the message from the dead worker thread and pipes the payload directly back into the `PaymentEmailWorker.onMessage()` method for reprocessing.
+* **Poison Pill:** If a message fails to process after 3 attempts (EmailWorker grabs, fails, puts into PEL, picked up by PSSweeper and given back to EmailWorker for a maximum of 3 retries), it is dropped from the PEL and logged in the table as "Processing" for manual investigation. This prevents infinite retry loops (the polling service will now ignore this) on unprocessable messages.
 
 ## Thread Pool Isolation
 
