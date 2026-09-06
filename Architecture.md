@@ -1,6 +1,11 @@
-## Overview
 
-## Database & Asynchronous Processing
+
+# SSN Invente 2026: Payment & Registration System Architecture - Documentation with Gemini, Designed by Saipranav
+
+The Invente Payment System is a high-concurrency Spring Boot application built to handle unpredictable registration spikes without dropping transactions or deadlocking the database. The architecture strictly separates HTTP ingress from downstream processing, using an Nginx API Gateway at the edge, PostgreSQL as the absolute source of truth, and Redis Streams as the asynchronous message broker.
+
+*Transactional Outbox Pattern Strictly Followed*
+
 
 ### Payment Verification & Reminder Polling Pipeline (Redis)
 
@@ -9,7 +14,7 @@ To handle burst traffic during registration drops and enforce automated reminder
 1. **Postgres Lock & Partial Indexes:** Scheduled pollers run `SELECT ... JOIN ... FOR UPDATE OF tps SKIP LOCKED`. This exclusively locks the payment records without locking joined tables (like `users`). Partial indexes (e.g., `WHERE email_sent IS NULL`) ensure instant lock acquisition without full table scans.
 2. **Commit-Then-Publish:** To prevent race conditions, the locked records are updated to `queued` in Postgres, and the payload is published to the Redis Stream *only* via `TransactionSynchronizationManager.afterCommit()`.
 3. **Consumer Groups & Thread Isolation:** Dedicated worker nodes use `XREADGROUP` to pull from the unified stream (`invente:payments:verified_stream`). Blocking operations are isolated into strict thread pools (`verificationPollerExecutor`, `reminderPollerExecutor`, and `EmailWorker-`) to prevent thread starvation cascades.
-4. **Acknowledgment & Fault Tolerance:** Once the worker completes the task, it sends an `XACK`. Unacknowledged messages revert to the Pending Entries List (PEL). A background Sweeper uses `XCLAIM` to re-route idle messages from dead workers, and enforces Poison Pill protection (`getTotalDeliveryCount() > 5`) to permanently drop structurally invalid emails and flag them for manual review.
+4. **Acknowledgment & Fault Tolerance:** Once the worker completes the task, it sends an `XACK`. Unacknowledged messages revert to the Pending Entries List (PEL). A background Sweeper uses `XCLAIM` to re-route idle messages from dead workers, and enforces Poison Pill protection (`getTotalDeliveryCount() > 3`) to permanently drop structurally invalid emails and flag them for manual review.
 
 ### Redis Connection Pooling
 
@@ -20,12 +25,6 @@ The Redis integration utilizes the `LettuceConnectionFactory` combined with `Gen
 * `minIdle`: 16 (Prevents cold-start latency spikes)
 
 ---
-
-# SSN Invente 2026: Payment & Registration System Architecture - Documentation with Gemini, Designed by Saipranav
-
-The Invente Payment System is a high-concurrency Spring Boot application built to handle unpredictable registration spikes without dropping transactions or deadlocking the database. The architecture strictly separates HTTP ingress from downstream processing, using an Nginx API Gateway at the edge, PostgreSQL as the absolute source of truth, and Redis Streams as the asynchronous message broker.
-
-*Transactional Outbox Pattern Strictly Followed*
 
 ## 1. The Technology Stack
 
@@ -103,3 +102,4 @@ The Automatic Rollback: Spring's transaction manager intercepts this uncaught ru
 The Lock Release: The moment PostgreSQL receives the ROLLBACK, it aborts the transaction and natively drops all row locks associated with it.
 
 The records remain safely in the database with their original state. Once Redis comes back online, the next scheduled polling cycle will simply pick them up again. In your RedisConfig, `commandTimeout(Duration.ofMillis(timeout))` is set to a strict ceiling. If the Redis server hangs, Lettuce times out immediately, throwing the exception and triggering the rollback to prevent long-running open transactions from hoarding locks and exhausting your PostgreSQL connection pool.
+
