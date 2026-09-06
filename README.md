@@ -71,8 +71,8 @@ To prevent thread exhaustion cascading across the application, the system strict
 ```mermaid
 flowchart LR
 
-    Client["External Client (not a part of this Repo)"]
-    InternalClient["Internal Client (Admin)"]
+    Client["External Client (This Repo)"]
+    InternalClient["Internal Client not a part of this repo(Admin)"]
 
     subgraph Edge["Edge / Gateway"]
         Nginx["Nginx Reverse Proxy<br/>(SSL, CORS, Rate Limit)"]
