@@ -37,6 +37,16 @@ public interface TicketPaymentsMapping {
     @Update("UPDATE invente_payment_db.public.ticket_payments SET reminder_email_sent = 'sent' WHERE ticket_id = #{ticketId}")
     int updateReminderEmailSentStatus(@Param("ticketId") UUID ticketId);
 
-    @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = 'processing' WHERE ticket_id = #{ticketId}")
+    @Update("UPDATE invente_payment_db.public.ticket_payments SET email_sent = 'processing' AND reminder_email_sent = 'processing' AND rejection_email = 'processing' WHERE ticket_id = #{ticketId}")
     int shiftEmailForManualProcessing(@Param("ticketId") UUID ticketId);
+
+    @Update("UPDATE invente_payment_db.public.ticket_payments SET rejection_email = 'queued' WHERE ticket_id = #{ticketId} AND rejection_email IS NULL")
+    void markRejectionEmailAsQueued(UUID ticketId);
+
+    @Update("UPDATE invente_payment_db.public.ticket_payments SET rejection_email = 'sent' WHERE ticket_id = #{ticketId} AND rejection_email = 'queued'")
+    int updateRejectionEmailSentStatus(UUID ticketId);
+
+    @Update("update invente_payment_db.public.ticket_payments set status='Rejected' where ticket_id=#{ticketId}")
+    int updateStatusToRejectedForSpecificTicket(UUID ticketId);
+
 }

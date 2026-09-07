@@ -7,7 +7,9 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
+import jakarta.mail.Address;
 import jakarta.mail.MessagingException;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -117,6 +119,133 @@ public class TicketEmailSenderService {
             throw new RuntimeException("Failed to send hackathon email for ticket " + ticketId, e);
         }
     }
+
+    public void sendPaymentReminderMail(String recipientEmail, UUID ticketId) {
+        if (!"on".equalsIgnoreCase(System.getenv("EMAIL_KILLSWITCH"))) {
+            log.info("EMAIL_KILLSWITCH is off. Skipping reminder email for {}", recipientEmail);
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(System.getenv("MAIL_ID"), "Invente 2026 Registrations");
+            helper.setTo(recipientEmail);
+            helper.setSubject("Action Required: Upload Payment Proof for Invente 2026");
+            helper.setReplyTo(System.getenv("MAIL_ID"), "Invente 2026 Support");
+            helper.setSentDate(new Date());
+
+            String uploadLink = System.getenv("BASE_UPLOAD_URL") + "/" + ticketId.toString();
+            String htmlContent = generatePaymentReminderHtml(uploadLink, ticketId);
+
+            helper.setText(htmlContent, true);
+
+            try {
+                org.springframework.core.io.ClassPathResource logoResource = new org.springframework.core.io.ClassPathResource("invente-orange.png");
+                byte[] logoBytes = logoResource.getInputStream().readAllBytes();
+                helper.addInline("logoImage", new ByteArrayResource(logoBytes), "image/png");
+            } catch (Exception e) {
+                log.warn("Could not attach local orange logo inline to reminder email. Error: {}", e.getMessage());
+            }
+
+            mailSender.send(message);
+            log.info("Successfully sent payment reminder email to {}", recipientEmail);
+
+        } catch (MessagingException | IOException e) {
+            throw new RuntimeException("Failed to send payment reminder email to " + recipientEmail, e);
+        }
+    }
+    public void sendPaymentRejectionMail(String recipientEmail, UUID ticketId) {
+        if (!"on".equalsIgnoreCase(System.getenv("EMAIL_KILLSWITCH"))) {
+            log.info("EMAIL_KILLSWITCH is off. Skipping rejection email for {}", recipientEmail);
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(System.getenv("MAIL_ID"), "Invente 2026 Registrations Team");
+            helper.setTo(recipientEmail);
+            helper.setSubject("UPDATE ON YOUR PASS: Your Payment Has Been Rejected - Invente 2026");
+            helper.getMimeMessage().setReplyTo(new Address[] {
+                    new InternetAddress("kathirezhil2310288@ssn.edu.in", "Kathir Ezhil"),
+                    new InternetAddress("bharath2310957@ssn.edu.in", "Bharath Ram S K")
+            });
+            helper.setSentDate(new Date());
+
+            
+            String htmlContent = generatePaymentRejectionHtml(ticketId);
+
+            helper.setText(htmlContent, true);
+
+
+            mailSender.send(message);
+            log.info("Successfully sent payment rejection email to {}", recipientEmail);
+
+        } catch (MessagingException | IOException e) {
+            throw new RuntimeException("Failed to send payment rejection email to " + recipientEmail, e);
+        }
+    }
+    private String generatePaymentRejectionHtml(UUID ticketId) {
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background-color: #d9534f; color: white; padding: 15px; text-align: center; border-radius: 5px 5px 0 0; }
+                .header h2 { margin: 0; font-size: 20px; }
+                .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 5px 5px; }
+                .ticket-id { font-family: monospace; background: #eee; padding: 3px 6px; border-radius: 3px; font-weight: bold; }
+                .contact-box { background-color: #fff; border-left: 4px solid #d9534f; padding: 15px; margin: 20px 0; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+                .contact-person { margin-bottom: 15px; }
+                .contact-person:last-child { margin-bottom: 0; }
+                .contact-person a { color: #d9534f; text-decoration: none; }
+                .footer { text-align: center; margin-top: 20px; font-size: 0.9em; color: #777; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>Payment Verification Failed</h2>
+            </div>
+            <div class="content">
+                <p>Dear Participant,</p>
+                
+                <p>We are writing to inform you that the payment proof submitted for your registration (Ticket ID: <span class="ticket-id">%s</span>) has been rejected.</p>
+                
+                <p>After a manual verification by our volunteer team, we were unable to validate your transaction based on the proof provided. This could be due to but not limited to an improper PDF, mismatched transaction ID, or an incomplete transaction.</p>
+                
+                <p>To resolve this issue or if you believe this is an error, please reach out to our support team immediately with a clear copy of your payment receipt:</p>
+                <p>Please <b>REPLY ALL</b> to this email with your updated payment proof (without changing the subject line and recipient) or contact us directly via the details below.</p>
+                
+                <div class="contact-box">
+                    <div class="contact-person">
+                        <strong>Kathir Ezhil</strong><br>
+                        Phone / WhatsApp: <a href="tel:+917550254009">+91 75502 54009</a><br>
+                        Email: <a href="mailto:kathirezhil2310288@ssn.edu.in">kathirezhil2310288@ssn.edu.in</a>
+                    </div>
+                    <div class="contact-person">
+                        <strong>Bharath Ram S K</strong><br>
+                        Phone / WhatsApp: <a href="tel:+918825992601">+91 88259 92601</a><br>
+                        Email: <a href="mailto:bharath2310957@ssn.edu.in">bharath2310957@ssn.edu.in</a>
+                    </div>
+                </div>
+                
+                <p>Please ensure you include your Ticket ID in all communications.</p>
+                
+                <p>Best regards,<br><strong>SSN Invente Team</strong></p>
+            </div>
+            <div class="footer">
+                &copy; 2026 SSN Invente. All rights reserved.
+            </div>
+        </body>
+        </html>
+        """.formatted(ticketId.toString());
+    }
+
     private byte[] generateQRCodeBytes(String data) throws WriterException, IOException {
         // 1. Render at higher resolution (Retina/HiDPI crispness)
         int qrSize = 800;
@@ -213,42 +342,7 @@ public class TicketEmailSenderService {
         ImageIO.write(cardImage, "PNG", pngOutputStream);
         return pngOutputStream.toByteArray();
     }
-    public void sendPaymentReminderMail(String recipientEmail, UUID ticketId) {
-        if (!"on".equalsIgnoreCase(System.getenv("EMAIL_KILLSWITCH"))) {
-            log.info("EMAIL_KILLSWITCH is off. Skipping reminder email for {}", recipientEmail);
-            return;
-        }
 
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setFrom(System.getenv("MAIL_ID"), "Invente 2026 Registrations");
-            helper.setTo(recipientEmail);
-            helper.setSubject("Action Required: Upload Payment Proof for Invente 2026");
-            helper.setReplyTo(System.getenv("MAIL_ID"), "Invente 2026 Support");
-            helper.setSentDate(new Date());
-
-            String uploadLink = System.getenv("BASE_UPLOAD_URL") + "/" + ticketId.toString();
-            String htmlContent = generatePaymentReminderHtml(uploadLink, ticketId);
-
-            helper.setText(htmlContent, true);
-
-            try {
-                org.springframework.core.io.ClassPathResource logoResource = new org.springframework.core.io.ClassPathResource("invente-orange.png");
-                byte[] logoBytes = logoResource.getInputStream().readAllBytes();
-                helper.addInline("logoImage", new ByteArrayResource(logoBytes), "image/png");
-            } catch (Exception e) {
-                log.warn("Could not attach local orange logo inline to reminder email. Error: {}", e.getMessage());
-            }
-
-            mailSender.send(message);
-            log.info("Successfully sent payment reminder email to {}", recipientEmail);
-
-        } catch (MessagingException | IOException e) {
-            throw new RuntimeException("Failed to send payment reminder email to " + recipientEmail, e);
-        }
-    }
 
     private String generatePaymentReminderHtml(String uploadLink, UUID ticketId) {
         return String.format("""
@@ -672,4 +766,6 @@ public class TicketEmailSenderService {
                 BORDER_COLOR, TEXT_MUTED, THEME_COLOR
         );
     }
+
+
 }

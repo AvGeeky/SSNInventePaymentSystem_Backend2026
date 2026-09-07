@@ -51,7 +51,7 @@ public class PaymentVerificationPoller {
             return;
         }
 
-        log.info("Thread {} polled {} newly verified payments.", Thread.currentThread().getName(), lockedBatch.size());
+        log.info("Verification Thread {} polled {} newly verified payments.", Thread.currentThread().getName(), lockedBatch.size());
 
         List<Map<String, String>> payloadsToPublish = new ArrayList<>();
 

@@ -1,7 +1,6 @@
 package com.saipbuilds.inventepayment2026.Services;
 
 import com.saipbuilds.inventepayment2026.mappings.TicketPaymentsMapping;
-import com.saipbuilds.inventepayment2026.mappings.UsersMapping;
 import com.saipbuilds.inventepayment2026.mappings.VerificationMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,19 +17,19 @@ import java.util.*;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ReminderEmailPoller {
+public class PaymentRejectionPoller {
 
     private final VerificationMapper verificationMapper;
     private final StringRedisTemplate redisTemplate;
+    private final TicketPaymentsMapping ticketPaymentsMapping;
 
     private static final int DAILY_EMAIL_LIMIT = 1000;
     private static final int MAX_BATCH_SIZE = 20;
     private static final String STREAM_KEY = "invente:payments:verified_stream";
-    private final TicketPaymentsMapping ticketPaymentsMapping;
-    private final UsersMapping usersMapping;
 
-    @Async("reminderPollerExecutor")
-    @Scheduled(fixedRateString = "${REMINDER_POLLER_RATE:2000}")
+
+    @Async("rejectionPollerExecutor")
+    @Scheduled(fixedRateString = "${PAYMENT_VERIFICATION_POLLER_RATE:2000}")
     @Transactional
     public void pollAndPublishVerifiedPayments() {
 
@@ -47,29 +46,28 @@ public class ReminderEmailPoller {
 
         int fetchSize = Math.min(MAX_BATCH_SIZE, remainingQuota);
 
-        List<Map<String, Object>> lockedBatch = verificationMapper.fetchReminderSendableLockedBatch(fetchSize);
+        List<Map<String, Object>> lockedBatch = verificationMapper.fetchRejectionLockedBatch(fetchSize);
 
         if (lockedBatch.isEmpty()) {
             return;
         }
 
-        log.info("Reminder Thread {} polled {} newly verified payments.", Thread.currentThread().getName(), lockedBatch.size());
+        log.info("Rejection Thread {} polled {} newly verified payments.", Thread.currentThread().getName(), lockedBatch.size());
 
         List<Map<String, String>> payloadsToPublish = new ArrayList<>();
 
         for (Map<String, Object> row : lockedBatch) {
             UUID ticketId = (UUID) row.get("ticket_id");
-            String recipientEmail = (String) row.get("email");
-
+            String recipientEmail = row.get("email").toString();
 
             Map<String, String> streamPayload = new HashMap<>();
             streamPayload.put("ticket_id", ticketId.toString());
             streamPayload.put("recipient_email", recipientEmail);
-            streamPayload.put("email_type", "payment_reminder");
+            streamPayload.put("email_type", "payment_rejection");
 
             payloadsToPublish.add(streamPayload);
 
-            ticketPaymentsMapping.markReminderEmailAsQueued(ticketId);
+            ticketPaymentsMapping.markRejectionEmailAsQueued(ticketId);
         }
 
 

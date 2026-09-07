@@ -38,4 +38,14 @@ public class InternalControllerReceiverService {
         int r = ticketPaymentsMapping.updateStatusToAcceptedForSpecificTicket(ticketId);
         return r == 1;
     }
+
+    public boolean setPaymentRejected( UUID ticketId) {
+        // Implementation for rejecting payment
+        String time = ticketPaymentsMapping.findTicket(ticketId);
+        if (time == null) {
+            return false;
+        }
+        int r = ticketPaymentsMapping.updateStatusToRejectedForSpecificTicket(ticketId);
+        return r == 1;
+    }
 }

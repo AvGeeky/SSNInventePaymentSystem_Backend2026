@@ -34,4 +34,14 @@ public interface VerificationMapper {
    """)
     List<Map<String, Object>> fetchReminderSendableLockedBatch(@Param("batchSize") int batchSize);
 
+    @Select("""
+        SELECT tps.ticket_id, u.email
+        FROM invente_payment_db.public.ticket_payments tps
+        JOIN invente_payment_db.public.users u ON tps.user_id = u.user_id
+        WHERE tps.status = 'Rejected'
+        AND tps.rejection_email IS NULL
+        LIMIT #{fetchSize}
+        FOR UPDATE SKIP LOCKED
+    """)
+    List<Map<String, Object>> fetchRejectionLockedBatch(@Param("fetchSize") int fetchSize);
 }

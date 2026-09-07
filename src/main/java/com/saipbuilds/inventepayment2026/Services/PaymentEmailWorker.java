@@ -49,6 +49,21 @@ public class PaymentEmailWorker implements StreamListener<String, MapRecord<Stri
                 redisTemplate.opsForStream().acknowledge("invente:payments:verified_stream", "email-workers-group", recordId);
                 return;
             }
+            else if ("payment_rejection".equals(emailType)) {
+                String recipientEmail = payload.get("recipient_email");
+
+                emailSenderService.sendPaymentRejectionMail(recipientEmail, ticketId);
+
+                int s = ticketPaymentsMapping.updateRejectionEmailSentStatus(ticketId);
+                if (s==1){
+                    log.info("Successfully updated rejection_email_sent status for ticket {}", ticketId);
+                } else {
+                    log.error("Failed to update rejection_email_sent status for ticket {}", ticketId);
+                    throw new Exception("Failed to update rejection_email_sent status for ticket " + ticketId);
+                }
+                redisTemplate.opsForStream().acknowledge("invente:payments:verified_stream", "email-workers-group", recordId);
+                return;
+            }
 
             Map<String, Object> paymentDetails = emailDataMapper.getUserAndPaymentDetails(ticketId);
 

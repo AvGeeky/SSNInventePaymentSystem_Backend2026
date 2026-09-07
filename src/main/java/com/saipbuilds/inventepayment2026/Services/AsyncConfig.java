@@ -32,4 +32,15 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    @Bean(name = "rejectionPollerExecutor")
+    public Executor rejectionPollerExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(25);
+        executor.setThreadNamePrefix("rejectionPollerWorker-");
+        executor.initialize();
+        return executor;
+    }
 }

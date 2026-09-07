@@ -47,4 +47,23 @@ public class InternalController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PostMapping("/restricted/v1/reject-payment")
+    public ResponseEntity<Map<String, Object>> reject(@RequestBody Map<String, String> request){
+        String ticketIdStr = request.get("ticket_id");
+        if (ticketIdStr == null || ticketIdStr.isBlank()) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "E");
+            errorResponse.put("message", "ticket_id not provided in request body.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+        }
+        UUID ticketId = UUID.fromString(ticketIdStr);
+        internalControllerReceiverService.setPaymentRejected(ticketId);
+
+        // Send Response
+        Map<String, Object> response = new HashMap<>();
+        response.put("ticket_id", ticketId);
+        response.put("message", "Rejected!");
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
 }
