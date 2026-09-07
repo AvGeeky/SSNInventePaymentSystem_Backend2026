@@ -182,8 +182,8 @@ Redis acts as an at-least-once delivery buffer, distributing messages via the `e
 ### Resilience & Rollback Architecture
 
 * **The Exception:** If Redis goes down during the transaction (e.g., while executing the atomic daily quota check), the Lettuce client throws a `RedisConnectionFailureException`.
-* **The Automatic Rollback:** Spring's transaction manager intercepts this uncaught runtime exception and instantly sends a `ROLLBACK` command to PostgreSQL.
-* **The Lock Release:** PostgreSQL natively drops all row locks associated with the aborted transaction. The records remain safely in the database in their original un-queued state, ready to be picked up by the next scheduled polling cycle once Redis recovers. `commandTimeout` is strictly capped at 10 seconds to prevent hanging connections from exhausting the database pool.
+* **The Automatic Rollback:** Spring's transaction manager intercepts this uncaught runtime exception and instantly sends a `ROLLBACK` command to PostgreSQL since the service method for polling is `@Transactional`.
+* **The Lock Release:** PostgreSQL natively drops all row locks associated with the aborted transaction. The records remain safely in the database in their original un-queued state, ready to be picked up by the next scheduled polling cycle once Redis recovers. `commandTimeout` is strictly capped at 10 seconds to prevent hanging connections from exhausting the database pool (Redis doesn't respond but the TCP remains open).
 
 ---
 
@@ -193,7 +193,7 @@ To prevent thread exhaustion cascading across the application, the system strict
 
 ### Thread Pool Isolation
 
-* **Poller Pools:** 5 threads dedicated to querying verified payments (`verificationPollerExecutor`), 5 for pending reminders (`reminderPollerExecutor`), and 5 for rejected notifications (`rejectionPollerExecutor`). Backed by queue capacities of 50 to absorb database slowdowns without crossing over.
+* **Poller Pools:** 5 threads dedicated to querying verified payments (`verificationPollerExecutor`), 5 for pending reminders (`reminderPollerExecutor`), and 2 for rejected notifications (`rejectionPollerExecutor`). Backed by queue capacities of 50 to absorb database slowdowns without crossing over.
 * **Worker Pool:** 5 threads (`EmailWorker-1` to `EmailWorker-5`) dedicated exclusively to executing slow SMTP network calls.
 * **Database Pool (Hikari):** Worker methods are intentionally **not** `@Transactional` (except for final micro-updates). This ensures long-running email network calls do not hold database connections hostage, preserving the Hikari pool for external web traffic.
 
@@ -210,10 +210,9 @@ The Redis integration utilizes the `LettuceConnectionFactory` combined with `Gen
 ## 5. Security & Edge Configuration
 
 * **Port Isolation:** Internal backend services (Ports 8080, 4000) are inaccessible from the host. All external traffic is forced through Nginx on Port 443.
-* **Dynamic CORS Management:** Nginx intercepts preflight `OPTIONS` requests and dynamically evaluates the `$http_origin` against a hardcoded map of allowed frontend domains. CORS is fully disabled in the Spring/Node backends to prevent duplicate header crashes.
-* **Path Stripping:** Requests hitting `https://.../fileapi/` are seamlessly proxied to the Admin Backend root (`/`) using trailing-slash stripping.
+* **Path Stripping:** Requests hitting `https://.../fileapi/ or /api/` are seamlessly proxied to the Admin Backend root (`/`) using trailing-slash stripping or Spring root(`/api`) .
 * **Rate Limiting:** `limit_req_zone` restricts traffic to 10 requests/second per IP with burst queues to mitigate brute-force/DDoS attempts.
-* **Protected Telemetry:** Endpoints for Grafana (`/monitoring/`) and RedisInsight (`/redis/`) are protected via basic authentication (`htpasswd`).
+* **Protected Telemetry:** Endpoints for Grafana (`/monitoring/`) and RedisInsight (`/redis/`) are protected via authentication (`htpasswd`).
 
 ---
 
