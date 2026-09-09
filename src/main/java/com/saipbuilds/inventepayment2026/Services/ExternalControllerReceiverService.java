@@ -79,16 +79,6 @@ public class ExternalControllerReceiverService {
                 ticketEventMapping.insert_ticket_event(ticketEvent);
             }
         }
-//        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-//            @Override
-//            public void afterCommit() {
-//                Map<String, String> payload = new HashMap<>();
-//                payload.put("ticket_id", newTicketId.toString());
-//                payload.put("email_type", "payment_reminder");
-//                payload.put("recipient_email", request.getEmail());
-//                redisTemplate.opsForStream().add("invente:payments:verified_stream", payload);
-//            }
-//        });
 
         return newTicketId;
     }
@@ -96,8 +86,12 @@ public class ExternalControllerReceiverService {
     @Transactional
     public UUID handleHackathonRegistration(HackathonRegistrationRequest request) {
         Map<String,Object> hackStats = getHackathonStats();
-        if (hackStats.get("total_registrations") != null && (Long) hackStats.get("total_registrations") >= 51) {
+        if (hackStats.get("total_registrations") != null && (Long) hackStats.get("total_registrations") > 50) {
             throw new IllegalStateException("Hackathon registration limit reached. No more registrations are allowed.");
+        } else if (hackStats.get("software_count") != null && (Long) hackStats.get("software_count") > 30 && "Software".equalsIgnoreCase(request.getDomain())) {
+            throw new IllegalStateException("Software Hackathon registration limit reached. No more registrations are allowed for this domain.");
+        } else if (hackStats.get("hardware_count") != null && (Long) hackStats.get("hardware_count") > 20 && "Hardware".equalsIgnoreCase(request.getDomain())) {
+            throw new IllegalStateException("Hardware Hackathon registration limit reached. No more registrations are allowed for this domain.");
         }
 
         UUID newTicketId = createUUIDV7();
@@ -174,16 +168,7 @@ public class ExternalControllerReceiverService {
             }
         }
 
-//        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-//            @Override
-//            public void afterCommit() {
-//                Map<String, String> payload = new HashMap<>();
-//                payload.put("ticket_id", newTicketId.toString());
-//                payload.put("email_type", "payment_reminder");
-//                payload.put("recipient_email", request.getLeader().getEmail());
-//                redisTemplate.opsForStream().add("invente:payments:verified_stream", payload);
-//            }
-//        });
+
 
         return newTicketId;
     }

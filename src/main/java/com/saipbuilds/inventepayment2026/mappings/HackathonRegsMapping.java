@@ -14,11 +14,14 @@ public interface HackathonRegsMapping {
     int insert_hackathon_regs(HackathonRegs team);
 
     @Select("""
-        SELECT 
-            COUNT(*) as total_registrations, 
-            COALESCE(SUM(CASE WHEN domain = 'Software' THEN 1 ELSE 0 END), 0) as software_count, 
-            COALESCE(SUM(CASE WHEN domain = 'Hardware' THEN 1 ELSE 0 END), 0) as hardware_count 
-        FROM invente_payment_db.public.hackathon_regs
+        SELECT
+            COUNT(*) AS total_registrations,
+            COUNT(*) FILTER (WHERE hr.domain = 'Software') AS software_count,
+            COUNT(*) FILTER (WHERE hr.domain = 'Hardware') AS hardware_count
+        FROM invente_payment_db.public.hackathon_regs hr
+        JOIN invente_payment_db.public.ticket_payments tps
+            ON hr.ticket_id = tps.ticket_id
+        WHERE tps.status = 'NotVerified' OR tps.status = 'Accepted';
     """)
     Map<String, Object> getHackathonStats();
 }

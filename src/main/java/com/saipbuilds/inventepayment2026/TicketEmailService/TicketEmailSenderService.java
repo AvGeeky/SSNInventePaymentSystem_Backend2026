@@ -492,7 +492,7 @@ public class TicketEmailSenderService {
                                 <h1 style='color:%s; font-size:24px; font-weight:700; margin:0 0 12px 0; letter-spacing:-0.5px;'>Action Required</h1>
 
                                 <p style='font-size:15px; color:%s; margin:0 0 25px 0; line-height:1.6;'>
-                                    Please complete your payment via Razorpay using the link below (if you haven't already), and then upload the generated payment receipt <b> sent to your E-Mail by RazorPay PDF </b> to confirm your registration.
+                                    Please complete your payment via Razorpay using the link below (if you haven't already), and then upload the generated payment <b>PDF</b> receipt <b> sent to your E-Mail by RazorPay </b> to confirm your registration.
                                 </p>
                                 
                                 %s <!-- DYNAMIC DETAILS BLOCK INJECTED HERE -->
