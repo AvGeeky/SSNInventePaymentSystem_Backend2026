@@ -12,7 +12,7 @@ import java.util.UUID;
 public interface EmailDataMapper {
 
     @Select("""
-        SELECT u.name, u.email, t.amount_paid, t.updated_at as paid_on, t.ticket_type
+        SELECT u.name, u.email, u.phone, u.college_name, t.amount_paid, t.updated_at as paid_on, t.ticket_type
         FROM invente_payment_db.public.users u
         JOIN invente_payment_db.public.ticket_payments t ON u.user_id = t.user_id
         WHERE t.ticket_id = #{ticketId}

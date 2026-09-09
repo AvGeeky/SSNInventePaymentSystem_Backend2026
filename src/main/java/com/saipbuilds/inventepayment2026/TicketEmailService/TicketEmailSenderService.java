@@ -17,7 +17,10 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
-
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -120,7 +123,12 @@ public class TicketEmailSenderService {
         }
     }
 
-    public void sendPaymentReminderMail(String recipientEmail, UUID ticketId) {
+    public void sendPaymentReminderMail(String recipientEmail, UUID ticketId,
+                                        Map<String, Object> paymentDetails,
+                                        Map<String, Object> teamDetails,
+                                        List<Map<String, Object>> members,
+                                        List<Map<String, Object>> bookedEvents) {
+
         if (!"on".equalsIgnoreCase(System.getenv("EMAIL_KILLSWITCH"))) {
             log.info("EMAIL_KILLSWITCH is off. Skipping reminder email for {}", recipientEmail);
             return;
@@ -132,12 +140,24 @@ public class TicketEmailSenderService {
 
             helper.setFrom(System.getenv("MAIL_ID"), "Invente 2026 Registrations");
             helper.setTo(recipientEmail);
-            helper.setSubject("Action Required: Upload Payment Proof for Invente 2026");
+            helper.setSubject("Action Required: Complete Payment & Upload Proof for Invente 2026");
             helper.setReplyTo(System.getenv("MAIL_ID"), "Invente 2026 Support");
             helper.setSentDate(new Date());
 
-            String uploadLink = System.getenv("BASE_UPLOAD_URL") + "/" + ticketId.toString();
-            String htmlContent = generatePaymentReminderHtml(uploadLink, ticketId);
+
+            String uploadLink = System.getenv("BASE_UPLOAD_URL") + "/receipt/" + ticketId.toString();
+
+            String name = (String) paymentDetails.get("name");
+            String email = (String) paymentDetails.get("email");
+            String phone = (String) paymentDetails.get("phone");
+            String collegeName = (String) paymentDetails.get("college_name");
+            String ticketType = (String) paymentDetails.get("ticket_type");
+
+            String razorpayUrl = buildRazorpayUrl(name, email, phone, collegeName, ticketType);
+
+            String dynamicDetailsHtml = buildDynamicDetailsBlock(paymentDetails, teamDetails, members, bookedEvents);
+
+            String htmlContent = generatePaymentReminderHtml(uploadLink, razorpayUrl, ticketId, dynamicDetailsHtml);
 
             helper.setText(htmlContent, true);
 
@@ -152,10 +172,12 @@ public class TicketEmailSenderService {
             mailSender.send(message);
             log.info("Successfully sent payment reminder email to {}", recipientEmail);
 
-        } catch (MessagingException | IOException e) {
+        } catch (Exception e) {
             throw new RuntimeException("Failed to send payment reminder email to " + recipientEmail, e);
         }
     }
+
+
     public void sendPaymentRejectionMail(String recipientEmail, UUID ticketId) {
         if (!"on".equalsIgnoreCase(System.getenv("EMAIL_KILLSWITCH"))) {
             log.info("EMAIL_KILLSWITCH is off. Skipping rejection email for {}", recipientEmail);
@@ -187,63 +209,6 @@ public class TicketEmailSenderService {
         } catch (MessagingException | IOException e) {
             throw new RuntimeException("Failed to send payment rejection email to " + recipientEmail, e);
         }
-    }
-    private String generatePaymentRejectionHtml(UUID ticketId) {
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background-color: #d9534f; color: white; padding: 15px; text-align: center; border-radius: 5px 5px 0 0; }
-                .header h2 { margin: 0; font-size: 20px; }
-                .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 5px 5px; }
-                .ticket-id { font-family: monospace; background: #eee; padding: 3px 6px; border-radius: 3px; font-weight: bold; }
-                .contact-box { background-color: #fff; border-left: 4px solid #d9534f; padding: 15px; margin: 20px 0; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-                .contact-person { margin-bottom: 15px; }
-                .contact-person:last-child { margin-bottom: 0; }
-                .contact-person a { color: #d9534f; text-decoration: none; }
-                .footer { text-align: center; margin-top: 20px; font-size: 0.9em; color: #777; }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h2>Payment Verification Failed</h2>
-            </div>
-            <div class="content">
-                <p>Dear Participant,</p>
-                
-                <p>We are writing to inform you that the payment proof submitted for your registration (Ticket ID: <span class="ticket-id">%s</span>) has been rejected.</p>
-                
-                <p>After a manual verification by our volunteer team, we were unable to validate your transaction based on the proof provided. This could be due to but not limited to an improper PDF, mismatched transaction ID, or an incomplete transaction.</p>
-                
-                <p>To resolve this issue or if you believe this is an error, please reach out to our support team immediately with a clear copy of your payment receipt:</p>
-                <p>Please <b>REPLY ALL</b> to this email with your updated payment proof (without changing the subject line and recipient) or contact us directly via the details below.</p>
-                
-                <div class="contact-box">
-                    <div class="contact-person">
-                        <strong>Kathir Ezhil</strong><br>
-                        Phone / WhatsApp: <a href="tel:+917550254009">+91 75502 54009</a><br>
-                        Email: <a href="mailto:kathirezhil2310288@ssn.edu.in">kathirezhil2310288@ssn.edu.in</a>
-                    </div>
-                    <div class="contact-person">
-                        <strong>Bharath Ram S K</strong><br>
-                        Phone / WhatsApp: <a href="tel:+918825992601">+91 88259 92601</a><br>
-                        Email: <a href="mailto:bharath2310957@ssn.edu.in">bharath2310957@ssn.edu.in</a>
-                    </div>
-                </div>
-                
-                <p>Please ensure you include your Ticket ID in all communications.</p>
-                
-                <p>Best regards,<br><strong>SSN Invente Team</strong></p>
-            </div>
-            <div class="footer">
-                &copy; 2026 SSN Invente. All rights reserved.
-            </div>
-        </body>
-        </html>
-        """.formatted(ticketId.toString());
     }
 
     private byte[] generateQRCodeBytes(String data) throws WriterException, IOException {
@@ -343,105 +308,255 @@ public class TicketEmailSenderService {
         return pngOutputStream.toByteArray();
     }
 
+    private String encodePair(String key, String value) {
+        if (value == null) return key + "=";
+        try {
+            return URLEncoder.encode(key, StandardCharsets.UTF_8).replace("+", "%20")
+                    + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+        } catch (Exception e) {
+            return key + "=" + value;
+        }
+    }
 
-    private String generatePaymentReminderHtml(String uploadLink, UUID ticketId) {
+    public String buildRazorpayUrl(String fullName, String email, String phone, String collegeName, String ticketType) {
+        String baseUrl = "https://axisbpayments.razorpay.com/Invente26";
+
+        String college = "Others";
+        if (collegeName != null) {
+            String upper = collegeName.toUpperCase();
+            if (upper.equals("SSN") || upper.contains("SRI SIVASUBRAMANIYA")) college = "SSN";
+            else if (upper.equals("SNUC") || upper.contains("SHIV NADAR")) college = "SNUC";
+        }
+
+        String feeCheckbox = "";
+        if (ticketType != null) {
+            String lowerType = ticketType.toLowerCase();
+            if (lowerType.contains("hack")) feeCheckbox = "hackathon_registration_fee";
+            else if (lowerType.contains("workshop")) feeCheckbox = "workshop_charges";
+            else if (lowerType.contains("tech")) feeCheckbox = "registration_fees";
+            else if (lowerType.contains("racing")) feeCheckbox = "nitro_racing";
+        }
+
+        List<String> query = new ArrayList<>();
+        query.add(encodePair("full_name", fullName));
+        query.add(encodePair("email", email));
+        query.add(encodePair("phone", phone));
+
+        if (!feeCheckbox.isEmpty()) {
+            query.add(encodePair(feeCheckbox, "1"));
+        }
+
+        query.add(encodePair("college_name", collegeName != null ? collegeName : ""));
+        query.add(encodePair("college", college));
+
+        return baseUrl + "?" + String.join("&", query);
+    }
+
+
+    private String generatePaymentRejectionHtml(UUID ticketId) {
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background-color: #d9534f; color: white; padding: 15px; text-align: center; border-radius: 5px 5px 0 0; }
+                .header h2 { margin: 0; font-size: 20px; }
+                .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 5px 5px; }
+                .ticket-id { font-family: monospace; background: #eee; padding: 3px 6px; border-radius: 3px; font-weight: bold; }
+                .contact-box { background-color: #fff; border-left: 4px solid #d9534f; padding: 15px; margin: 20px 0; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+                .contact-person { margin-bottom: 15px; }
+                .contact-person:last-child { margin-bottom: 0; }
+                .contact-person a { color: #d9534f; text-decoration: none; }
+                .footer { text-align: center; margin-top: 20px; font-size: 0.9em; color: #777; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>Payment Verification Failed</h2>
+            </div>
+            <div class="content">
+                <p>Dear Participant,</p>
+                
+                <p>We are writing to inform you that the payment proof submitted for your registration (Ticket ID: <span class="ticket-id">%s</span>) has been rejected.</p>
+                
+                <p>After a manual verification by our volunteer team, we were unable to validate your transaction based on the proof provided. This could be due to but not limited to an improper PDF, mismatched transaction ID, or an incomplete transaction.</p>
+                
+                <p>To resolve this issue or if you believe this is an error, please reach out to our support team immediately with a clear copy of your payment receipt:</p>
+                <p>Please <b>REPLY ALL</b> to this email with your updated payment proof (without changing the subject line and recipient) or contact us directly via the details below.</p>
+                
+                <div class="contact-box">
+                    <div class="contact-person">
+                        <strong>Kathir Ezhil</strong><br>
+                        Phone / WhatsApp: <a href="tel:+917550254009">+91 75502 54009</a><br>
+                        Email: <a href="mailto:kathirezhil2310288@ssn.edu.in">kathirezhil2310288@ssn.edu.in</a>
+                    </div>
+                    <div class="contact-person">
+                        <strong>Bharath Ram S K</strong><br>
+                        Phone / WhatsApp: <a href="tel:+918825992601">+91 88259 92601</a><br>
+                        Email: <a href="mailto:bharath2310957@ssn.edu.in">bharath2310957@ssn.edu.in</a>
+                    </div>
+                </div>
+                
+                <p>Please ensure you include your Ticket ID in all communications.</p>
+                
+                <p>Best regards,<br><strong>SSN Invente Team</strong></p>
+            </div>
+            <div class="footer">
+                &copy; 2026 SSN Invente. All rights reserved.
+            </div>
+        </body>
+        </html>
+        """.formatted(ticketId.toString());
+    }
+
+    private String buildDynamicDetailsBlock(Map<String, Object> paymentDetails, Map<String, Object> teamDetails,
+                                            List<Map<String, Object>> members, List<Map<String, Object>> bookedEvents) {
+        StringBuilder sb = new StringBuilder();
+
+        String collegeName = paymentDetails.get("college_name") != null ? (String) paymentDetails.get("college_name") : "N/A";
+
+        // User & Payment Info
+        sb.append("<div style='background-color:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:20px; margin-bottom:25px; text-align:left;'>");
+        sb.append("<h3 style='margin-top:0; color:#333333; font-size:16px; border-bottom:1px solid #eeeeee; padding-bottom:10px;'>Registration Summary</h3>");
+        sb.append("<table width='100%' cellpadding='4' cellspacing='0' style='font-size:14px; color:#555555;'>");
+        sb.append("<tr><td width='35%'><strong>Name:</strong></td><td>").append(paymentDetails.get("name")).append("</td></tr>");
+        sb.append("<tr><td><strong>College:</strong></td><td>").append(collegeName).append("</td></tr>");
+        sb.append("<tr><td><strong>Pass Type:</strong></td><td>").append(paymentDetails.get("ticket_type")).append("</td></tr>");
+        sb.append("<tr><td><strong>Amount Due:</strong></td><td>₹").append(paymentDetails.get("amount_paid")).append("</td></tr>");
+        sb.append("</table>");
+
+        // Hackathon specific info
+        if (teamDetails != null && members != null) {
+            sb.append("<h4 style='margin:20px 0 10px 0; color:#333333; font-size:14px;'>Hackathon Team: ").append(teamDetails.get("team_name")).append("</h4>");
+            sb.append("<table width='100%' cellpadding='4' cellspacing='0' style='font-size:13px; color:#555555; margin-bottom:15px;'>");
+            sb.append("<tr><td width='35%'><strong>Domain:</strong></td><td>").append(teamDetails.get("domain")).append("</td></tr>");
+            sb.append("<tr><td><strong>Track:</strong></td><td>").append(teamDetails.getOrDefault("track", "N/A")).append("</td></tr>");
+            sb.append("<tr><td valign='top'><strong>PS Description:</strong></td><td style='white-space:pre-wrap;'>").append(teamDetails.getOrDefault("ps_description", "N/A")).append("</td></tr>");
+            sb.append("</table>");
+
+            sb.append("<table width='100%' cellpadding='6' cellspacing='0' style='font-size:12px; border-collapse:collapse; margin-top:10px;'>");
+            sb.append("<tr style='background-color:#f5f5f5;'><th align='left' style='border:1px solid #ddd;'>Member Name</th><th align='left' style='border:1px solid #ddd;'>Role</th></tr>");
+            for (Map<String, Object> m : members) {
+                String role = (Boolean) m.get("is_lead") ? "Leader" : "Member";
+                sb.append("<tr><td style='border:1px solid #ddd;'>").append(m.get("name")).append("</td><td style='border:1px solid #ddd;'>").append(role).append("</td></tr>");
+            }
+            sb.append("</table>");
+        }
+        // Standard Events info
+        else if (bookedEvents != null && !bookedEvents.isEmpty()) {
+            sb.append("<h4 style='margin:20px 0 10px 0; color:#333333; font-size:14px;'>Registered Events</h4>");
+            sb.append("<ul style='font-size:13px; color:#555555; padding-left:20px; margin:0;'>");
+            for (Map<String, Object> event : bookedEvents) {
+                // UPDATED: Using 'event_name' exactly as aliased in your SQL mapper
+                sb.append("<li style='margin-bottom:6px;'><strong>").append(event.get("event_name")).append("</strong> (").append(event.get("dept_name")).append(")</li>");
+            }
+            sb.append("</ul>");
+        }
+
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private String generatePaymentReminderHtml(String uploadLink, String razorpayUrl, UUID ticketId, String dynamicDetailsHtml) {
         return String.format("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset='utf-8'>
-        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    </head>
-    <body style='margin:0; padding:0; background-color:%s; font-family:"Segoe UI", Helvetica, Arial, sans-serif;'>
-        <table role='presentation' width='100%%' cellspacing='0' cellpadding='0' style='background-color:%s; padding:40px 0;'>
-            <tr>
-                <td align='center'>
-                    <table role='presentation' width='600' cellspacing='0' cellpadding='0' style='background-color:%s; border-radius:16px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,0.06); border:1px solid %s;'>
-                        
-                        <tr>
-                            <td style='height:6px; background:linear-gradient(90deg, %s, #FFA726);'></td>
-                        </tr>
-                        
-                        <tr>
-                            <td style='padding:45px 40px;'>
-                                
-                                <table role='presentation' width='100%%' cellspacing='0' cellpadding='0'>
-                                    <tr>
-                                        <td align='center' style='padding-bottom:30px;'>
-                                            <img src='cid:logoImage' alt='Invente Logo' width='170' style='display:block; border:0;'>
-                                        </td>
-                                    </tr>
-                                </table>
-                                
-                                <div style='text-align:center; margin-bottom:35px;'>
-                                    <h1 style='color:%s; font-size:24px; font-weight:700; margin:0 0 12px 0; letter-spacing:-0.5px;'>Action Required</h1>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+</head>
+<body style='margin:0; padding:0; background-color:%s; font-family:"Segoe UI", Helvetica, Arial, sans-serif;'>
+    <table role='presentation' width='100%%' cellspacing='0' cellpadding='0' style='background-color:%s; padding:40px 0;'>
+        <tr>
+            <td align='center'>
+                <table role='presentation' width='600' cellspacing='0' cellpadding='0' style='background-color:%s; border-radius:16px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,0.06); border:1px solid %s;'>
+                    
+                    <tr>
+                        <td style='height:6px; background:linear-gradient(90deg, %s, #FFA726);'></td>
+                    </tr>
+                    
+                    <tr>
+                        <td style='padding:45px 40px;'>
+                            
+                            <table role='presentation' width='100%%' cellspacing='0' cellpadding='0'>
+                                <tr>
+                                    <td align='center' style='padding-bottom:30px;'>
+                                        <img src='cid:logoImage' alt='Invente Logo' width='170' style='display:block; border:0;'>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <div style='text-align:center; margin-bottom:25px;'>
+                                <h1 style='color:%s; font-size:24px; font-weight:700; margin:0 0 12px 0; letter-spacing:-0.5px;'>Action Required</h1>
 
-                                    <p style='font-size:15px; color:%s; margin:0 0 25px 0; line-height:1.6;'>
-                                        Please upload the payment receipt PDF from <strong>RazorPay</strong> that was sent to your email inbox to complete your registration.
+                                <p style='font-size:15px; color:%s; margin:0 0 25px 0; line-height:1.6;'>
+                                    Please complete your payment via Razorpay using the link below (if you haven't already), and then upload the generated payment receipt <b> sent to your E-Mail by RazorPay PDF </b> to confirm your registration.
+                                </p>
+                                
+                                %s <!-- DYNAMIC DETAILS BLOCK INJECTED HERE -->
+
+                                <!-- Informational Context Box -->
+                                <div style='background-color:%s; border:1px solid %s; border-radius:10px; padding:16px 20px; display:inline-block; text-align:left; max-width:85%%;'>
+                                    <p style='font-size:13px; color:%s; margin:0 0 10px 0; line-height:1.6;text-align:center;'>
+                                        <strong style='color:%s;'>⏱ Processing:</strong> You will receive your Event Pass within <strong>3-4 working days</strong> after submitting your payment proof.
                                     </p>
-
-                                    <!-- Informational Context Box -->
-                                    <div style='background-color:%s; border:1px solid %s; border-radius:10px; padding:16px 20px; display:inline-block; text-align:left; max-width:85%%;'>
-                                        <p style='font-size:13px; color:%s; margin:0 0 10px 0; line-height:1.6;text-align:center;'>
-                                            <strong style='color:%s;'>⏱ Processing:</strong> You will receive your Event Pass within <strong>3-4 working days</strong> after submitting your payment proof.
-                                        </p>
-
-                                        <div style='border-top:1px dashed %s; margin:10px 0; height:1px;'></div>
-
-                                        <p style='font-size:12px; color:%s; margin:0; line-height:1.5; font-style:italic; text-align:center;'>
-                                            Ignore this email if you have already completed this step.
-                                        </p>
-                                    </div>
-                                </div>
-                                
-                                <!-- Call to Action Box -->
-                                <table role='presentation' width='100%%' cellspacing='0' cellpadding='0' style='background-color:%s; border:1px solid %s; border-radius:10px; margin-bottom:30px; text-align:center;'>
-                                    <tr>
-                                        <td style='padding:30px 24px;'>
-                                            <a href='%s' style='display:inline-block; padding:14px 28px; background-color:%s; color:#FFFFFF; text-decoration:none; font-weight:600; border-radius:8px; font-size:14px; box-shadow:0 4px 12px rgba(220,132,0,0.25);'>Upload Payment Proof</a>
-                                        </td>
-                                    </tr>
-                                </table>
-                                
-                                <div style='text-align:center; margin-bottom:35px;'>
-                                    <p style='font-size:13px; color:%s; margin:0;'>Your Ticket ID: <br><strong style='color:%s; font-family:Consolas, monospace;'>%s</strong></p>
-                                </div>
-                        
-                                <div style='text-align:center; border-top:1px solid %s; padding-top:25px;'>
-                                    <p style='color:%s; font-size:12px; line-height:1.6; margin:0 0 10px 0;'>
-                                        Sent by <strong>Invente 2026 Payment System</strong>.<br>
-                                        Payment System Built by <a href='https://www.linkedin.com/in/saipranav-m/' target='_blank' style='color:%s; text-decoration:none; font-weight:600;'>Saipranav M</a>.<br>
-                                        Attendance System Built by <a href='https://www.linkedin.com/in/pranav-vijay-524410329/' target='_blank' style='color:%s; text-decoration:none; font-weight:600;'>Pranav Vijay</a> and <a href='https://linkedin.com/in/pranav-krishna-p' target='_blank' style='color:%s; text-decoration:none; font-weight:600;'>Pranav Krishna</a>.
+                                    <div style='border-top:1px dashed %s; margin:10px 0; height:1px;'></div>
+                                    <p style='font-size:12px; color:%s; margin:0; line-height:1.5; font-style:italic; text-align:center;'>
+                                        Ignore this email if you have already completed this step.
                                     </p>
                                 </div>
-                                
-                            </td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-    </body>
-    </html>
-    """,
-                // 1-4: Body & Main Tables
-                BG_LIGHT, BG_LIGHT, CARD_BG, BORDER_COLOR,
-                // 5: Top Gradient
-                THEME_COLOR,
-                // 6-7: Main Headers
+                            </div>
+                            
+                            <!-- Call to Action Box (Dual Buttons) -->
+                            <table role='presentation' width='100%%' cellspacing='0' cellpadding='0' style='background-color:%s; border:1px solid %s; border-radius:10px; margin-bottom:30px; text-align:center;'>
+                                <tr>
+                                    <td style='padding:25px 24px 15px 24px;'>
+                                        <a href='%s' style='display:inline-block; padding:14px 28px; background-color:%s; color:#FFFFFF; text-decoration:none; font-weight:600; border-radius:8px; font-size:14px; box-shadow:0 4px 12px rgba(220,132,0,0.25);'>1. Pay via Razorpay</a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style='padding:0 24px 25px 24px;'>
+                                        <a href='%s' style='display:inline-block; padding:14px 28px; background-color:%s; color:#FFFFFF; text-decoration:none; font-weight:600; border-radius:8px; font-size:14px; box-shadow:0 4px 12px rgba(220,132,0,0.25);'>2. Upload Payment Proof</a>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <div style='text-align:center; margin-bottom:35px;'>
+                                <p style='font-size:13px; color:%s; margin:0;'>Your Ticket ID: <br><strong style='color:%s; font-family:Consolas, monospace;'>%s</strong></p>
+                            </div>
+                    
+                            <div style='text-align:center; border-top:1px solid %s; padding-top:25px;'>
+                                <p style='color:%s; font-size:12px; line-height:1.6; margin:0 0 10px 0;'>
+                                    Sent by <strong>Invente 2026 Payment System</strong>.<br>
+                                    Payment System Built by <a href='https://www.linkedin.com/in/saipranav-m/' target='_blank' style='color:%s; text-decoration:none; font-weight:600;'>Saipranav M</a>.<br>
+                                    Attendance System Built by <a href='https://www.linkedin.com/in/pranav-vijay-524410329/' target='_blank' >Pranav Vijay</a> and <a href='https://linkedin.com/in/pranav-krishna-p' target='_blank' >Pranav Krishna</a>.
+                                </p>
+                            </div>
+                            
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+""",
+                BG_LIGHT, BG_LIGHT, CARD_BG, BORDER_COLOR, THEME_COLOR,
                 THEME_DARK, TEXT_MUTED,
-                // 8-13: Informational Context Box
+                dynamicDetailsHtml, // Injected Block
                 BG_LIGHT, BORDER_COLOR, TEXT_MUTED, THEME_DARK, BORDER_COLOR, TEXT_MUTED,
-                // 14-15: CTA Wrapper Table
                 BG_LIGHT, BORDER_COLOR,
-                // 16-17: CTA Button
+                razorpayUrl, THEME_COLOR,
                 uploadLink, THEME_COLOR,
-                // 18-20: Ticket ID
                 TEXT_MUTED, THEME_DARK, ticketId.toString(),
-                // 21-25: Footer Lines & Links
                 BORDER_COLOR, TEXT_MUTED, THEME_COLOR, THEME_COLOR, THEME_COLOR
         );
     }
+
+
     private String generateTicketDetailsHtml(Map<String, Object> userDetails, List<Map<String, Object>> events, UUID ticketId) {
         StringBuilder eventsTableHtml = new StringBuilder();
 

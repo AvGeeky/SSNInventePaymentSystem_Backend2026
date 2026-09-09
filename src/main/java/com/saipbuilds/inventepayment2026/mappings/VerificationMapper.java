@@ -28,7 +28,7 @@ public interface VerificationMapper {
         JOIN invente_payment_db.public.users u ON tps.user_id = u.user_id 
         WHERE tps.reminder_email_sent IS NULL 
           AND tps.s3_url IS NULL 
-          AND tps.created_at <= NOW() - INTERVAL '3 minutes'
+         AND tps.created_at <= NOW() - INTERVAL '3 minutes'
         LIMIT #{batchSize} 
         FOR UPDATE OF tps SKIP LOCKED
    """)

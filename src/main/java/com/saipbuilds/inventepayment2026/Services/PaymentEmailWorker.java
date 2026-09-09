@@ -33,38 +33,7 @@ public class PaymentEmailWorker implements StreamListener<String, MapRecord<Stri
         String emailType = payload.getOrDefault("email_type", "tech");
 
         try {
-
-            if ("payment_reminder".equals(emailType)) {
-                String recipientEmail = payload.get("recipient_email");
-
-                emailSenderService.sendPaymentReminderMail(recipientEmail, ticketId);
-
-                int s = ticketPaymentsMapping.updateReminderEmailSentStatus(ticketId);
-                if (s==1){
-                    log.info("Successfully updated reminder_email_sent status for ticket {}", ticketId);
-                } else {
-                    log.error("Failed to update reminder_email_sent status for ticket {}", ticketId);
-                    throw new Exception("Failed to update reminder_email_sent status for ticket " + ticketId);
-                }
-                redisTemplate.opsForStream().acknowledge("invente:payments:verified_stream", "email-workers-group", recordId);
-                return;
-            }
-            else if ("payment_rejection".equals(emailType)) {
-                String recipientEmail = payload.get("recipient_email");
-
-                emailSenderService.sendPaymentRejectionMail(recipientEmail, ticketId);
-
-                int s = ticketPaymentsMapping.updateRejectionEmailSentStatus(ticketId);
-                if (s==1){
-                    log.info("Successfully updated rejection_email_sent status for ticket {}", ticketId);
-                } else {
-                    log.error("Failed to update rejection_email_sent status for ticket {}", ticketId);
-                    throw new Exception("Failed to update rejection_email_sent status for ticket " + ticketId);
-                }
-                redisTemplate.opsForStream().acknowledge("invente:payments:verified_stream", "email-workers-group", recordId);
-                return;
-            }
-
+            // 1. Fetch User Data First (Required for all emails now)
             Map<String, Object> paymentDetails = emailDataMapper.getUserAndPaymentDetails(ticketId);
 
             if (paymentDetails == null) {
@@ -73,23 +42,66 @@ public class PaymentEmailWorker implements StreamListener<String, MapRecord<Stri
                 return;
             }
 
-            if ("hack".equals(emailType)) {
-                Map<String, Object> teamDetails = emailDataMapper.getHackathonTeamDetails(ticketId);
+            // 2. Fetch Nested Data (Events or Hackathon Team) based on DB ticket_type
+            String actualTicketType = (String) paymentDetails.getOrDefault("ticket_type", "");
+            boolean isHackathon = actualTicketType.toLowerCase().contains("hackathon");
+
+            Map<String, Object> teamDetails = null;
+            List<Map<String, Object>> members = null;
+            List<Map<String, Object>> bookedEvents = null;
+
+            if (isHackathon) {
+                teamDetails = emailDataMapper.getHackathonTeamDetails(ticketId);
                 if (teamDetails != null) {
                     UUID teamId = (UUID) teamDetails.get("team_id");
-                    List<Map<String, Object>> members = emailDataMapper.getHackathonMembers(teamId);
+                    members = emailDataMapper.getHackathonMembers(teamId);
+                }
+            } else {
+                bookedEvents = emailDataMapper.getEventsForTicket(ticketId);
+            }
+
+            // 3. Route Execution
+            if ("payment_reminder".equals(emailType)) {
+                String recipientEmail = payload.get("recipient_email");
+
+                emailSenderService.sendPaymentReminderMail(recipientEmail, ticketId, paymentDetails, teamDetails, members, bookedEvents);
+
+                int s = ticketPaymentsMapping.updateReminderEmailSentStatus(ticketId);
+                if (s == 1) {
+                    log.info("Successfully updated reminder_email_sent status for ticket {}", ticketId);
+                } else {
+                    throw new Exception("Failed to update reminder_email_sent status for ticket " + ticketId);
+                }
+                redisTemplate.opsForStream().acknowledge("invente:payments:verified_stream", "email-workers-group", recordId);
+                return;
+            }
+            else if ("payment_rejection".equals(emailType)) {
+                String recipientEmail = payload.get("recipient_email");
+                emailSenderService.sendPaymentRejectionMail(recipientEmail, ticketId);
+
+                int s = ticketPaymentsMapping.updateRejectionEmailSentStatus(ticketId);
+                if (s == 1) {
+                    log.info("Successfully updated rejection_email_sent status for ticket {}", ticketId);
+                } else {
+                    throw new Exception("Failed to update rejection_email_sent status for ticket " + ticketId);
+                }
+                redisTemplate.opsForStream().acknowledge("invente:payments:verified_stream", "email-workers-group", recordId);
+                return;
+            }
+
+            // Standard Ticket Purchases
+            if ("hack".equals(emailType) || isHackathon) {
+                if (teamDetails != null) {
                     emailSenderService.sendHackathonTicketMail(paymentDetails, teamDetails, members, ticketId);
                 }
             } else {
-                List<Map<String, Object>> bookedEvents = emailDataMapper.getEventsForTicket(ticketId);
                 emailSenderService.sendTicketPurchaseMail(paymentDetails, bookedEvents, ticketId);
             }
 
-            int s =ticketPaymentsMapping.updateEmailSentStatus(ticketId);
-            if (s==1){
+            int s = ticketPaymentsMapping.updateEmailSentStatus(ticketId);
+            if (s == 1) {
                 log.info("Successfully updated email_sent status for ticket {}", ticketId);
             } else {
-                log.error("Failed to update email_sent status for ticket {}", ticketId);
                 throw new Exception("Failed to update email_sent status for ticket " + ticketId);
             }
 
