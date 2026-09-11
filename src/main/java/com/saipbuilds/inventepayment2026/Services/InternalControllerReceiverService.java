@@ -6,6 +6,7 @@ import com.saipbuilds.inventepayment2026.dto.StandardRegistrationRequest;
 import com.saipbuilds.inventepayment2026.entities.*;
 import com.saipbuilds.inventepayment2026.mappings.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,8 @@ public class InternalControllerReceiverService {
     private final HackathonRegsMapping hackathonRegsMapping;
     private final HackathonMembersMapping hackathonMembersMapping;
     private final EventsMapping eventsMapping;
+    private final StringRedisTemplate redisTemplate;
+    private static final String STREAM_KEY = "invente:payments:verified_stream";
 
     private UUID createUUIDV7() {
         return UuidCreator.getTimeOrderedEpoch();
@@ -47,5 +50,10 @@ public class InternalControllerReceiverService {
         }
         int r = ticketPaymentsMapping.updateStatusToRejectedForSpecificTicket(ticketId);
         return r == 1;
+    }
+
+    public void sendStatsEmail(Map<String, String> payload) {
+        payload.put("email_type","send_stats_email");
+        redisTemplate.opsForStream().add(STREAM_KEY, payload);
     }
 }

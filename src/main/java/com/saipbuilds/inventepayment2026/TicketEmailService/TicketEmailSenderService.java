@@ -882,5 +882,189 @@ public class TicketEmailSenderService {
         );
     }
 
+    public void sendStatsEmail(String recipientEmail,
+                               Map<String, Object> paymentStats,
+                               List<Map<String, Object>> eventStats,
+                               List<Map<String, Object>> hackStats,
+                               List<Map<String, Object>> revenueStats,
+                               Long uniqueUsers,
+                               List<Map<String, Object>> demographics) {
 
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(System.getenv("MAIL_ID"), "Invente 2026 Admin");
+            helper.setTo(recipientEmail);
+            helper.setSubject("Invente 2026 - Registration & Revenue Statistics");
+            helper.setSentDate(new Date());
+
+            String htmlContent = generateStatsHtml(paymentStats, eventStats, hackStats, revenueStats, uniqueUsers, demographics);
+            helper.setText(htmlContent, true);
+
+            try {
+                org.springframework.core.io.ClassPathResource logoResource = new org.springframework.core.io.ClassPathResource("invente-orange.png");
+                byte[] logoBytes = logoResource.getInputStream().readAllBytes();
+                helper.addInline("logoImage", new ByteArrayResource(logoBytes), "image/png");
+            } catch (Exception e) {
+                log.warn("Could not attach local orange logo to stats email.");
+            }
+
+            mailSender.send(message);
+            log.info("Successfully sent statistics email to {}", recipientEmail);
+
+        } catch (Exception e) {
+            log.error("Failed to send stats email to {}. Error: {}", recipientEmail, e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
+
+    private String generateStatsHtml(Map<String, Object> paymentStats,
+                                     List<Map<String, Object>> eventStats,
+                                     List<Map<String, Object>> hackStats,
+                                     List<Map<String, Object>> revenueStats,
+                                     Long uniqueUsers,
+                                     List<Map<String, Object>> demographics) {
+
+        long totalHackTeams = 0;
+        for (Map<String, Object> stat : hackStats) {
+            totalHackTeams += ((Number) stat.get("count")).longValue();
+        }
+
+        StringBuilder html = new StringBuilder();
+
+        // 1. Base Header & Styling wrapper
+        html.append("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset='utf-8'>
+        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    </head>
+    <body style='margin:0; padding:0; background-color:#f9fbfd; font-family:"Segoe UI", Helvetica, Arial, sans-serif;'>
+        <table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='background-color:#f9fbfd; padding:40px 0;'>
+            <tr>
+                <td align='center'>
+                    <table role='presentation' width='800' cellspacing='0' cellpadding='0' style='background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,0.06); border:1px solid #e0e0e0;'>
+                        <tr>
+                            <td style='height:6px; background:linear-gradient(90deg, #DC8400, #FFA726);'></td>
+                        </tr>
+                        <tr>
+                            <td style='padding:40px;'>
+                                <div style='text-align:center; margin-bottom:30px;'>
+                                    <img src='cid:logoImage' alt='Invente Logo' width='140' style='display:block; border:0; margin: 0 auto 20px auto;'>
+                                    <h1 style='color:#333333; font-size:26px; font-weight:700; margin:0;'>Platform Statistics Report</h1>
+                                    <p style='color:#555555; font-size:15px; margin-top:8px;'>Real-time metrics for Invente 2026</p>
+                                </div>
+                                
+                                <!-- OVERVIEW METRICS -->
+                                <div style='background-color:#f4f7f6; border:1px solid #e0e0e0; border-radius:8px; padding:20px; text-align:center; margin-bottom:30px;'>
+                                    <h3 style='margin:0 0 10px 0; color:#DC8400; font-size:22px;'>""").append(uniqueUsers).append("""
+                                    </h3>
+                                    <p style='margin:0; color:#555555; font-size:14px; font-weight:600; text-transform:uppercase;'>Unique Paid Attendees</p>
+                                </div>
+    """);
+
+        // 2. Ticket Status Breakdown (Using the new Map logic)
+        html.append("<h3 style='color:#333333; font-size:18px; border-bottom:2px solid #eeeeee; padding-bottom:8px;'>Ticket Processing Status</h3>");
+        html.append("<table width='100%' cellpadding='10' cellspacing='0' style='font-size:14px; color:#555555; margin-bottom:30px; border-collapse:collapse; text-align:center;'>");
+        html.append("<tr style='background-color:#f5f5f5;'><th style='border:1px solid #ddd;'>Pending Payment</th><th style='border:1px solid #ddd; color:#f57c00;'>Not Verified</th><th style='border:1px solid #ddd; color:#2e7d32;'>Accepted</th><th style='border:1px solid #ddd; color:#c62828;'>Rejected</th></tr>");
+        html.append("<tr>")
+                .append("<td style='border:1px solid #ddd; font-weight:bold;'>").append(paymentStats.get("pending_count")).append("</td>")
+                .append("<td style='border:1px solid #ddd; font-weight:bold; color:#f57c00;'>").append(paymentStats.get("not_verified_count")).append("</td>")
+                .append("<td style='border:1px solid #ddd; font-weight:bold; color:#2e7d32;'>").append(paymentStats.get("accepted_count")).append("</td>")
+                .append("<td style='border:1px solid #ddd; font-weight:bold; color:#c62828;'>").append(paymentStats.get("rejected_count")).append("</td>")
+                .append("</tr></table>");
+
+        // 3. Event-Wise Registrations
+        html.append("<h3 style='color:#333333; font-size:18px; border-bottom:2px solid #eeeeee; padding-bottom:8px;'>Event-Wise Registrations (Accepted Only)</h3>");
+        html.append("<div style='max-height:400px; overflow-y:auto; margin-bottom:30px;'>");
+        html.append("<table width='100%' cellpadding='8' cellspacing='0' style='font-size:12px; color:#555555; border-collapse:collapse;'>");
+        html.append("<tr style='background-color:#f5f5f5;'><th align='left' style='border:1px solid #ddd;'>Event Name</th><th align='left' style='border:1px solid #ddd;'>Department</th><th align='center' style='border:1px solid #ddd;'>Accepted Registrations</th></tr>");
+        for (Map<String, Object> event : eventStats) {
+            html.append("<tr>")
+                    .append("<td style='border:1px solid #ddd;'><strong>").append(event.get("event_name")).append("</strong></td>")
+                    .append("<td style='border:1px solid #ddd;'>").append(event.get("dept_name")).append("</td>")
+                    .append("<td align='center' style='border:1px solid #ddd; font-weight:bold;'>").append(event.get("accepted_registrations")).append("</td>")
+                    .append("</tr>");
+        }
+        html.append("</table></div>");
+
+        // 4. Revenue & Type Breakdown
+        html.append("<h3 style='color:#333333; font-size:18px; border-bottom:2px solid #eeeeee; padding-bottom:8px;'>Revenue & Bookings by Ticket Type</h3>");
+        html.append("<table width='100%' cellpadding='10' cellspacing='0' style='font-size:14px; color:#555555; margin-bottom:30px; border-collapse:collapse;'>");
+        html.append("<tr style='background-color:#f5f5f5;'><th align='left' style='border:1px solid #ddd;'>Ticket Type</th><th align='right' style='border:1px solid #ddd;'>Tickets Issued</th><th align='right' style='border:1px solid #ddd;'>Gross Recovered (₹)</th></tr>");
+        for (Map<String, Object> rev : revenueStats) {
+            html.append("<tr><td style='border:1px solid #ddd;'><strong>").append(rev.get("ticket_type")).append("</strong></td>")
+                    .append("<td align='right' style='border:1px solid #ddd;'>").append(rev.get("tickets_booked")).append("</td>")
+                    .append("<td align='right' style='border:1px solid #ddd; color:#2e7d32; font-weight:bold;'>₹").append(rev.get("cost_recovered")).append("</td></tr>");
+        }
+        html.append("</table>");
+
+        // 5. Hackathon Breakdown
+        html.append("<h3 style='color:#333333; font-size:18px; border-bottom:2px solid #eeeeee; padding-bottom:8px;'>Hackathon Registrations</h3>");
+        html.append("<table width='100%' cellpadding='10' cellspacing='0' style='font-size:14px; color:#555555; margin-bottom:30px; border-collapse:collapse;'>");
+        html.append("<tr style='background-color:#f5f5f5;'><th align='left' style='border:1px solid #ddd;'>Domain Segment</th><th align='right' style='border:1px solid #ddd;'>Teams Registered</th></tr>");
+        for (Map<String, Object> stat : hackStats) {
+            html.append("<tr><td style='border:1px solid #ddd;'><strong>").append(stat.get("domain")).append("</strong></td>")
+                    .append("<td align='right' style='border:1px solid #ddd;'>").append(stat.get("count")).append("</td></tr>");
+        }
+        html.append("<tr style='background-color:#fff3e0;'><td style='border:1px solid #ddd;'><strong>OVERALL TEAMS</strong></td>")
+                .append("<td align='right' style='border:1px solid #ddd; font-weight:bold;'>").append(totalHackTeams).append("</td></tr>");
+        html.append("</table>");
+
+        // 6. College Demographics Table
+        html.append("<h3 style='color:#333333; font-size:18px; border-bottom:2px solid #eeeeee; padding-bottom:8px;'>Institution Demographics (Accepted Registrations)</h3>");
+        html.append("<div style='overflow-x:auto;'>");
+        html.append("<table width='100%' cellpadding='8' cellspacing='0' style='font-size:12px; color:#555555; border-collapse:collapse; text-align:center;'>");
+        html.append("<tr style='background-color:#f5f5f5;'>")
+                .append("<th align='left' style='border:1px solid #ddd; min-width:140px;'>Institution Name</th>")
+                .append("<th style='border:1px solid #ddd;'>Total</th>")
+                .append("<th style='border:1px solid #ddd; color:#1565c0;'>Male</th>")
+                .append("<th style='border:1px solid #ddd; color:#c62828;'>Female</th>")
+                .append("<th style='border:1px solid #ddd;'>1st Yr</th>")
+                .append("<th style='border:1px solid #ddd;'>2nd Yr</th>")
+                .append("<th style='border:1px solid #ddd;'>3rd Yr</th>")
+                .append("<th style='border:1px solid #ddd;'>4th Yr</th>")
+                .append("<th style='border:1px solid #ddd;'>Other</th>")
+                .append("</tr>");
+
+        for (Map<String, Object> demo : demographics) {
+            String collegeName = demo.get("college_name") != null ? demo.get("college_name").toString() : "Unknown/N.A";
+            html.append("<tr>")
+                    .append("<td align='left' style='border:1px solid #ddd; font-weight:bold;'>").append(collegeName).append("</td>")
+                    .append("<td style='border:1px solid #ddd; font-weight:bold;'>").append(demo.get("total_students")).append("</td>")
+                    .append("<td style='border:1px solid #ddd;'>").append(demo.get("male_count")).append("</td>")
+                    .append("<td style='border:1px solid #ddd;'>").append(demo.get("female_count")).append("</td>")
+                    .append("<td style='border:1px solid #ddd;'>").append(demo.get("year_1_count")).append("</td>")
+                    .append("<td style='border:1px solid #ddd;'>").append(demo.get("year_2_count")).append("</td>")
+                    .append("<td style='border:1px solid #ddd;'>").append(demo.get("year_3_count")).append("</td>")
+                    .append("<td style='border:1px solid #ddd;'>").append(demo.get("year_4_count")).append("</td>")
+                    .append("<td style='border:1px solid #ddd;'>").append(demo.get("year_other_count")).append("</td>")
+                    .append("</tr>");
+        }
+        html.append("</table></div>");
+
+        // 7. Footer
+        html.append("""
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style='background-color:#f5f5f5; text-align:center; padding:20px; border-top:1px solid #e0e0e0;'>
+                                <p style='color:#777777; font-size:12px; margin:0;'>
+                                    Automated Report generated by <strong>Invente 2026 Payment Backend</strong>.
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """);
+
+        return html.toString();
+    }
 }

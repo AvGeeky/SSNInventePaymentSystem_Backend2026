@@ -7,6 +7,8 @@ import com.saipbuilds.inventepayment2026.dto.StandardRegistrationRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,7 +26,10 @@ public class InternalController {
 
     public InternalController(InternalControllerReceiverService internalControllerReceiverService) {
         this.internalControllerReceiverService = internalControllerReceiverService;
+
     }
+
+
 
 
     @PostMapping("/restricted/v1/approve-payment")
@@ -65,5 +70,23 @@ public class InternalController {
         response.put("message", "Rejected!");
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("restricted/v1/trigger-stats-email")
+    public ResponseEntity<Map<String, String>> triggerStatsEmail(@RequestBody Map<String,String> recipientEmail) {
+        Map<String, String> payload = new HashMap<>();
+        String email = recipientEmail.get("recipientEmail");
+
+
+        payload.put("recipient_email", email);
+
+        internalControllerReceiverService.sendStatsEmail(payload);
+
+
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Statistics compilation job queued successfully.",
+                "recipient", email
+        ));
     }
 }

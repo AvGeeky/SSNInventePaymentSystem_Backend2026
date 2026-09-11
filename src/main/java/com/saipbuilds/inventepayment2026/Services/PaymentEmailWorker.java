@@ -29,11 +29,32 @@ public class PaymentEmailWorker implements StreamListener<String, MapRecord<Stri
         String recordId = message.getId().getValue();
         Map<String, String> payload = message.getValue();
 
-        UUID ticketId = UUID.fromString(payload.get("ticket_id"));
+
         String emailType = payload.getOrDefault("email_type", "tech");
+        UUID ticketId = UUID.fromString(payload.getOrDefault("ticket_id", String.valueOf(UUID.randomUUID())));
+
+        if ("send_stats_email".equals(emailType)) {
+            String recipientEmail = payload.get("recipient_email");
+
+            log.info("Worker initiating database compilation for stats email to {}", recipientEmail);
+
+            Map<String, Object> paymentStats = emailDataMapper.getPivotedPaymentStatusStats();
+            List<Map<String, Object>> eventStats = emailDataMapper.getEventWiseRegistrations();
+
+            List<Map<String, Object>> hackStats = emailDataMapper.getHackathonDomainStats();
+            List<Map<String, Object>> revenueStats = emailDataMapper.getTicketTypeRevenueStats();
+            Long uniqueUsers = emailDataMapper.getUniquePaidUsersCount();
+            List<Map<String, Object>> demographics = emailDataMapper.getCollegeDemographics();
+
+            emailSenderService.sendStatsEmail(recipientEmail, paymentStats, eventStats, hackStats, revenueStats, uniqueUsers, demographics);
+
+            redisTemplate.opsForStream().acknowledge("invente:payments:verified_stream", "email-workers-group", recordId);
+            return;
+        }
 
         try {
-            // 1. Fetch User Data First (Required for all emails now)
+
+            // 1. Fetch User Data First (Required for all emails)
             Map<String, Object> paymentDetails = emailDataMapper.getUserAndPaymentDetails(ticketId);
 
             if (paymentDetails == null) {
@@ -61,7 +82,9 @@ public class PaymentEmailWorker implements StreamListener<String, MapRecord<Stri
             }
 
             // 3. Route Execution
+
             if ("payment_reminder".equals(emailType)) {
+
                 String recipientEmail = payload.get("recipient_email");
 
                 emailSenderService.sendPaymentReminderMail(recipientEmail, ticketId, paymentDetails, teamDetails, members, bookedEvents);
