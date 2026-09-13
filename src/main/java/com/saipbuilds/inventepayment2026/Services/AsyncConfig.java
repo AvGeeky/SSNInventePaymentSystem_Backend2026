@@ -43,4 +43,15 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    @Bean(name = "receiptOCRPollerExecutor")
+    public Executor receiptOCRPollerExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("receiptOCRPollerWorker-");
+        executor.initialize();
+        return executor;
+    }
 }

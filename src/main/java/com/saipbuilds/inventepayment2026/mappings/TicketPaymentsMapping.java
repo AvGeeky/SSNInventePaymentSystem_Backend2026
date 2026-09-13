@@ -49,4 +49,6 @@ public interface TicketPaymentsMapping {
     @Update("update invente_payment_db.public.ticket_payments set status='Rejected' where ticket_id=#{ticketId}")
     int updateStatusToRejectedForSpecificTicket(UUID ticketId);
 
+    @Update("UPDATE invente_payment_db.public.ticket_payments SET payment_id = 'queued' WHERE ticket_id = #{ticketId} AND payment_id IS NULL")
+    void markPaymentIdAsQueued(UUID ticketId);
 }

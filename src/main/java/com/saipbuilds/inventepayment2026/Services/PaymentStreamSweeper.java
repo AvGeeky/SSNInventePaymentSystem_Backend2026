@@ -101,7 +101,7 @@ public class PaymentStreamSweeper {
         for (MapRecord<String, Object, Object> rawRecord : claimedRecords) {
             try {
                 // Spring Data Redis claim() returns generic Objects. 
-                // We cast them back to Strings to match your PaymentEmailWorker signature safely.
+                // We cast them back to Strings to match PaymentEmailWorker signature safely.
                 Map<String, String> stringPayload = new HashMap<>();
                 rawRecord.getValue().forEach((k, v) -> stringPayload.put(String.valueOf(k), String.valueOf(v)));
 
@@ -112,7 +112,7 @@ public class PaymentStreamSweeper {
 
                 log.info("Sweeper routing recovered ticket to worker logic...");
                 
-                // Send it directly to your existing worker function
+                // Send it directly to existing worker function
                 paymentEmailWorker.onMessage(typedRecord);
 
             } catch (Exception e) {

@@ -44,4 +44,13 @@ public interface VerificationMapper {
         FOR UPDATE SKIP LOCKED
     """)
     List<Map<String, Object>> fetchRejectionLockedBatch(@Param("fetchSize") int fetchSize);
+
+    @Select("""
+        SELECT ticket_id, s3_url AS pdf_url
+        FROM invente_payment_db.public.ticket_payments
+        WHERE status = 'NotVerified' AND s3_url IS NOT NULL AND payment_id IS NULL
+        LIMIT #{fetchSize}
+        FOR UPDATE SKIP LOCKED
+    """)
+    List<Map<String, Object>> fetchOCRReadyRecords(@Param("fetchSize")int maxBatchSize);
 }

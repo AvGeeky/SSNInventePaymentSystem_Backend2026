@@ -1,6 +1,7 @@
 package com.saipbuilds.inventepayment2026.DBConfig.Redis;
 
 import com.saipbuilds.inventepayment2026.Services.PaymentEmailWorker;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -27,6 +28,19 @@ public class RedisStreamConfig {
 
     public static final String STREAM_KEY = "invente:payments:verified_stream";
     public static final String CONSUMER_GROUP = "email-workers-group";
+
+    public static final String NODE_STREAM_KEY = "invente:payments:node_ocr_stream";
+    public static final String NODE_CONSUMER_GROUP = "node-service-group";
+
+    @PostConstruct
+    public void initializeExternalStreams() {
+        try {
+            redisTemplate.opsForStream().createGroup(NODE_STREAM_KEY, ReadOffset.from("0"), NODE_CONSUMER_GROUP);
+            log.info("Created Redis Consumer Group for Node.js: {}", NODE_CONSUMER_GROUP);
+        } catch (Exception e) {
+            log.debug("Consumer group {} already exists or stream not yet initialized.", NODE_CONSUMER_GROUP);
+        }
+    }
 
     @Bean
     public Subscription emailWorkerSubscription(RedisConnectionFactory connectionFactory) {
